@@ -1,91 +1,195 @@
-# Jellyfin-Media-Bar - Now with Play Now Function
+# Jellyfin Media Bar Enhanced Plugin
 
-![jsDelivr hits (GitHub)](https://img.shields.io/jsdelivr/gh/hm/makd/Jellyfin-Media-Bar?style=for-the-badge&logo=javascript&logoColor=white&labelColor=F0DB4F&color=323330&cacheSeconds=3600)
+Media Bar Enhanced is a plugin for Jellyfin that introduces a customizable and interactive media bar to your dashboard view on Jellyfin web.
 
+This plugin is a fork and enhancement of the original [Media Bar by MakD](https://github.com/MakD/Jellyfin-Media-Bar) media bar, but can be installed as plugin for easier installation and management/configuration.
 
+![logo](https://raw.githubusercontent.com/CodeDevMLH/jellyfin-plugin-media-bar-enhanced/main/logo.png)
 
-**IMP UPDATE — We have dropped support for the normal CSS version (for now). _(It still works, but there will be no further updates till the fullscreen mode is stabilized)_** 
+---
 
-The fullscreen version has a new look (in beta), and support for different screen sizes has been added. For any visual goof-ups, please open a bug report, including the device being used and whether it is encountered in portrait or landscape mode.
+## Table of Contents
+- [Jellyfin Media Bar Enhanced Plugin](#jellyfin-media-bar-enhanced-plugin)
+  - [Table of Contents](#table-of-contents)
+  - [Features](#features)
+    - [New Features \& Enhancements](#new-features--enhancements)
+    - [Core Features](#core-features)
+  - [Installation](#installation)
+  - [Client Compatibility](#client-compatibility)
+  - [Configuration](#configuration)
+    - [General Settings](#general-settings)
+    - [Custom Content](#custom-content)
+    - [Advanced Settings](#advanced-settings)
+  - [Build The Plugin By Yourself](#build-the-plugin-by-yourself)
+  - [Troubleshooting](#troubleshooting)
+    - [Effects Not Showing](#effects-not-showing)
+    - [Docker Permission Issues](#docker-permission-issues)
+  - [Contributing](#contributing)
 
+---
 
-Thanks to the Man, the Legend [BobHasNoSoul](https://github.com/BobHasNoSoul) for his work on the [jellyfinfeatured](https://github.com/BobHasNoSoul/jellyfin-featured) and [SethBacon](https://forum.jellyfin.org/u-sethbacon) and [TedHinklater](https://github.com/tedhinklater) for their take on the [Jellyfin-Featured-Content-Bar](https://github.com/tedhinklater/Jellyfin-Featured-Content-Bar). 
+## Features
 
-Here I present my version with some code improvements, loading optimizations, and security enhancements. Works best with the [Zombie theme](https://github.com/MakD/zombie-release) (_Shameless Plug_ `@import url(https://cdn.jsdelivr.net/gh/MakD/zombie-release@latest/zombie_revived.css);`, visit the repo for more color schemes).
+This plugin builds upon the original Media Bar with new capabilities and improvements:
 
+### New Features & Enhancements
+*   **Video Backdrop Support**: Play trailer as background video directly in the slideshow
+*   **SponsorBlock Integration**: Automatically skip intro/outro segments in YouTube trailers
+*   **Enhanced Controls**:
+    *   Keyboard shortcuts (Arrow keys to navigate, Space to pause, M to mute)
+    *   Option to always show navigation arrows
+    *   Standalone "Trailer" button (opens in a modal) if video backdrops are disabled
+*   **Smarter Playback**:
+    *   Option to wait for the trailer to end before advancing the slide.
+    *   Mute/Unmute controls
+*   **Customization**:
+    *   **Custom Media IDs**: Manually specify which items (Movies, Series, Collections/Boxsets) to display. Easily configurable via the plugin settings
+    *   **Seasonal Content Mode**: Define date-based lists for holidays and seasons (e.g., Halloween, Christmas)
+    *   Pagination dots turn into a counter (e.g., 1/20) if the limit is exceeded
+    *   Option to disable the loading screen
 
-> <ins>**Before Installing, please take a backup of your index.html file**<ins>
+### Core Features
+*   **Immersive Slideshow**: Rotates through your media library
+*   **Metadata Display**: Shows title, rating, year, and plot summary
+*   **Direct Play**: Click "Play" to start watching immediately
+*   **Details View**: Click "Info" to jump to the item's detail page
+*   **Add To Favorites**: Click the heart to add the item to your favorites
 
-<details>
-<summary> Desktop Layout </summary>
-  
-![Jellyfin Desktop Layout](https://raw.githubusercontent.com/MakD/Jellyfin-Media-Bar/refs/heads/main/img/Jelly-Web%20-%20Fullscreen%20Mode.png)
-  
-</details>
+## Installation
 
-<details>
+This plugin is based on Jellyfin Version `10.11.x`
 
-<summary> Mobile Layout </summary>
-  
-![Jellyfin Mobile Layout](https://raw.githubusercontent.com/MakD/Jellyfin-Media-Bar/refs/heads/main/img/Jelly-Mobile-Fullscreen.png)
+1.  Open your **Jellyfin Dashboard**.
+2.  Navigate to **Plugins** > **Repositories**.
+3.  Click the **+** button to add a new repository.
+4.  Enter a name for the repo and paste the following URL:
+    ```
+    https://raw.githubusercontent.com/CodeDevMLH/jellyfin-plugin-manifest/refs/heads/main/manifest.json
+    ```
+5.  Click **Save**.
+6.  Go to the **Catalog** tab.
+7.  Find **Media Bar Enhanced** (Under **General**) and install it.
+8.  **Restart your Jellyfin server.**
+9.  **Refresh your browser** (Ctrl+F5) to load the new interface elements.
 
-</details>
+## Client Compatibility
 
+Because this plugin relies on injecting JavaScript and CSS into the web interface, it works best on clients that use the web wrapper.
 
-# Prepping the files
-<details>
-  
-<summary>index.html</summary>
+| Client Platform | Status | Notes |
+| :--- | :---: | :--- |
+| **Web Browsers** (Chrome, Firefox, Edge, etc.) | ✅ | Fully supported. |
+| **Jellyfin Media Player** (Windows/Linux/macOS) | ✅ | Fully supported. |
+| **Android App** | ✅ | Works (Web wrapper). |
+| **iOS App** | ✅ | Works (Web wrapper). |
+| **Android TV / Fire TV** | ❌ | **Not supported** (Native UI). |
+| **Roku** | ❌ | **Not supported** (Native UI). |
+| **Swiftfin** | ❌ | **Not supported** (Native UI). |
 
-  1. Navigate to your `jellyfin-web` folder and search for the file index.html. (you can use any code editor, just remember to open with administrator privileges.
-  2. Search for `</head>`
-  3. Just before the `</head>`, plug the below code
+## Configuration
+
+Configure the plugin via **Dashboard** > **Plugins** > **Media Bar Enhanced**.
+
+> [!NOTE]
+> You must refresh your browser window (F5 or Ctrl+R) after saving changes for them to take effect.
+
+### General Settings
+*   **Enable Media Bar Enhanced Plugin**: Master switch to toggle the plugin.
+*   **Enable Video Backdrops**: Dynamically plays trailers in the background.
+*   **Wait For Trailer To End**: Prevents slide transition until the video finishes.
+*   **Enable Mobile Video**: specific setting to allow video playback on mobile devices (disabled by default to save data/battery).
+*   **Show Trailer Button**: Adds a button to open the trailer in a popup modal if video backdrops are disabled (e.g. on mobile if trailers are disabled there)
+
+### Custom Content
+Define exactly what shows up in your bar.
+
+*   **Enable Custom Media IDs**: Restrict the slideshow to a specific list of IDs.
+*   **Enable Seasonal Content Mode**: Advanced date-based scheduling.
+    *   Format: `DD.MM-DD.MM | Name | ID1, ID2, ID3`
+    *   Example: `20.10-31.10 | Halloween | <ID_OF_HALLOWEEN_COLLECTION>`
+    *   If the current date matches a range, those IDs are used. Otherwise, it defaults to standard behavior or the Custom Media IDs list.
+
+**How to get IDs:**
+Check the URL of an item in the web interface:
+`.../web/#/details?id=YOUR_ITEM_ID_HERE&...`
+
+### Advanced Settings
+*   **Slide Animations**: Enable/disable the "Zoom In" effect.
+*   **Use SponsorBlock**: Skips non-content segments in YouTube trailers (if the data exists).
+*   **Start Muted**: Videos start without sound (user can unmute).
+*   **Full Width Video**: Stretches video to cover the entire width (good for desktop, crop on mobile).
+*   **Enable Loading Screen**: Enable/disable the loading indicator while the bar initializes.
+*   **Always Show Arrows**: Keeps navigation arrows visible instead of hiding them on mouse leave.
+*   **Enable Keyboard Controls**:
+    *   `Left`/`Right`: Change slide
+    *   `Space`: Pause/Play slideshow
+    *   `M`: Mute/Unmute video
+*   **Content Limits**: Fine-tune performance by limiting the number of items (Movies, TV Shows) fetched.
+
+## Build The Plugin By Yourself
+
+If you want to build the plugin yourself:
+
+1.  Clone the repository.
+2.  Ensure you have the .NET SDK installed (NET 8 or 9 depending on your Jellyfin version).
+3.  Run the build command:
+    ```powershell
+    dotnet build Jellyfin.Plugin.MediaBarEnhanced/Jellyfin.Plugin.MediaBarEnhanced.csproj --configuration Release --output bin/Publish
+    ```
+4.  The compiled DLL and resources will be in bin/Publish.
+
+## Troubleshooting
+
+### Effects Not Showing
+1. **Verify plugin installation**:
+   - Check that the plugin appears in the jellyfin admin panel
+   - Ensure that the plugin is enabled and active
+
+2. **Clear browser cache**:
+   - Force refresh browser (Ctrl+F5)
+   - Clear jellyfin web client cache (--> mostly you have to clear the whole browser cache)
+
+### Docker Permission Issues
+If you encounter the message `Access was denied when attempting to inject script into index.html. Automatic direct injection failed. Automatic direct insertion failed. The system will now attempt to use the File Transformation plugin.` in the log or similar permission errors in Docker:
+
+**Option 1: Use File Transformation Plugin (Recommended)**
+
+Media Bar Enhanced now automatically detects and uses the [File Transformation](https://github.com/IAmParadox27/jellyfin-plugin-file-transformation) plugin (v2.5.0.0+) if it's installed. This eliminates permission issues by transforming content at runtime without modifying files on disk.
+
+**Installation Steps:**
+1. Install the File Transformation plugin from the Jellyfin plugin catalog
+2. Restart Jellyfin
+3. Media Bar Enhanced will automatically detect and use it (no configuration needed)
+4. Check logs to confirm: Look for "Successfully registered transformation with File Transformation plugin"
+
+**Benefits:**
+- No file permission issues in Docker environments
+- Works with read-only web directories
+- Survives Jellyfin updates without re-injection
+- No manual file modifications required
+
+**Option 2: Fix File Permissions**
+```bash
+# Find the actual index.html location
+docker exec -it jellyfin find / -name index.html
+
+# Fix ownership (replace 'jellyfin' with your container name and adjust user:group if needed)
+docker exec -it --user root jellyfin chown jellyfin:jellyfin /jellyfin/jellyfin-web/index.html
+
+# Restart container
+docker restart jellyfin
 ```
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MakD/Jellyfin-Media-Bar@latest/slideshowpure.css" />
-    <script async src="https://cdn.jsdelivr.net/gh/MakD/Jellyfin-Media-Bar@latest/slideshowpure.js"></script>
+
+**Option 3: Manual Volume Mapping**
+```bash
+# Extract index.html from container
+docker cp jellyfin:/jellyfin/jellyfin-web/index.html /path/to/jellyfin/config/index.html
+
+# Add to docker-compose.yml volumes section:
+volumes:
+  - /path/to/jellyfin/config/index.html:/jellyfin/jellyfin-web/index.html
 ```
-</details>
 
-And that is it. Hard refresh your web page (CTRL+Shift+R) twice, and Profit!
+## Contributing
 
-# Want a Custom List to be showcased instead of random items??
-
-No worries this got you covered. 
-
-## Steps
-
-1. Create a `list.txt` file inside your `avatars` folder.
-2. In line 1 give your list a name.
-3. Starting line 2, paste the item IDs you want to be showcased, one ID per line. For Example :
-
-```
-Awesome Playlist Name
-ItemID1
-ItemID2
-ItemID3
-ItemID4
-ItemID5
-```
-The next time it loads, it will display these items.
-
-# Uninstall the Bar
-
-<details>
-  
-<summary> Roll Back </summary>
-
-Restore the `index.html` file / remove the lines added and you are good to go!!!
-
-</details>
-
-
-## License
-
-[![Custom: DBAD License](https://img.shields.io/badge/License-Don't_Be_A_Dick-red)](LICENSE)
-
-
-This project is licensed under a DBAD license prohibiting any commercial use or redistribution.  
-All modifications must be contributed back to this repository.  
-Attribution to the original author (MakD) is required in any use or derivative work.
-
-Please take a look at the [LICENSE](LICENSE) file for full terms.
+Feel free to contribute to this project by creating pull requests or reporting issues.

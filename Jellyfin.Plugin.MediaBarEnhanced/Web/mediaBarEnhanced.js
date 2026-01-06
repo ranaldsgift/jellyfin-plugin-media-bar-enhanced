@@ -1,5 +1,18 @@
 /*
- * Jellyfin Slideshow by M0RPH3US v3.0.7
+ * Jellyfin Slideshow by M0RPH3US v3.0.6
+ * Modified by CodeDevMLH v1.1.0.0
+ * 
+ * New features:
+ * - optional Trailer background video support
+ * - option to make video backdrops full width
+ * - SponsorBlock support to skip intro/outro segments
+ * - option to always show arrows
+ * - option to disable/enable keyboard controls
+ * - option to show/hide trailer button if trailer as backdrop is disabled (opens in a modal)
+ * - option to wait for trailer to end before loading next slide
+ * - option to set a maximum for the pagination dots (will turn into a counter style if exceeded)
+ * - option to disable loading screen
+ * - option to put collection (boxsets) IDs into the slideshow to display their items
  */
 
 //Core Module Configuration
@@ -20,7 +33,21 @@ const CONFIG = {
   maxItems: 500,
   preloadCount: 3,
   fadeTransitionDuration: 500,
+  maxPaginationDots: 15,
   slideAnimationEnabled: true,
+  enableVideoBackdrop: true,
+  useSponsorBlock: true,
+  waitForTrailerToEnd: true,
+  startMuted: true,
+  fullWidthVideo: true,
+  enableMobileVideo: false,
+  showTrailerButton: true,
+  enableKeyboardControls: true,
+  alwaysShowArrows: false,
+  enableCustomMediaIds: false,
+  enableSeasonalContent: false,
+  customMediaIds: "",
+  enableLoadingScreen: true,
 };
 
 // State management
@@ -47,6 +74,9 @@ const STATE = {
     createdSlides: {},
     totalItems: 0,
     isLoading: false,
+    videoPlayers: {},
+    sponsorBlockInterval: null,
+    isMuted: CONFIG.startMuted,
   },
 };
 
@@ -164,14 +194,21 @@ const initLocalization = async () => {
  */
 
 const initLoadingScreen = () => {
-  const currentPath = window.location.href.toLowerCase();
+  const currentPath = window.location.href.toLowerCase().replace(window.location.origin, "");
   const isHomePage =
     currentPath.includes("/web/#/home.html") ||
     currentPath.includes("/web/#/home") ||
     currentPath.includes("/web/index.html#/home.html") ||
+    currentPath === "/web/index.html#/home" ||
     currentPath.endsWith("/web/");
 
   if (!isHomePage) return;
+
+  // Check LocalStorage for cached preference to avoid flash
+  const cachedSetting = localStorage.getItem('mediaBarEnhanced_enableLoadingScreen');
+  if (cachedSetting === 'false') {
+    return;
+  }
 
   const loadingDiv = document.createElement("div");
   loadingDiv.className = "bar-loading";
@@ -215,53 +252,31 @@ const initLoadingScreen = () => {
 
   const checkInterval = setInterval(() => {
     const loginFormLoaded = document.querySelector(".manualLoginForm");
-    const activeTab = document.querySelector(".pageTabContent.is-active");
+    const homePageLoaded =
+      document.querySelector(".homeSectionsContainer") &&
+      document.querySelector("#slides-container");
 
-    if (loginFormLoaded) {
-      finishLoading();
-      return;
-    }
+    if (loginFormLoaded || homePageLoaded) {
+      clearInterval(progressInterval);
+      clearInterval(checkInterval);
 
-    if (activeTab) {
-      const tabIndex = activeTab.getAttribute("data-index");
+      progressBar.style.transition = "width 300ms ease-in-out";
+      progressBar.style.width = "100%";
+      unfilledBar.style.width = "0%";
 
-      if (tabIndex === "0") {
-        const homeSections = document.querySelector(".homeSectionsContainer");
-        const slidesContainer = document.querySelector("#slides-container");
-
-        if (homeSections && slidesContainer) {
-          finishLoading();
-        }
-      } else {
-        if (
-          activeTab.children.length > 0 ||
-          activeTab.innerText.trim().length > 0
-        ) {
-          finishLoading();
-        }
-      }
+      progressBar.addEventListener('transitionend', () => {
+        requestAnimationFrame(() => {
+          const loader = document.querySelector(".bar-loading");
+          if (loader) {
+            loader.style.opacity = '0';
+            setTimeout(() => {
+              loader.remove();
+            }, 300);
+          }
+        });
+      })
     }
   }, CONFIG.loadingCheckInterval);
-
-  const finishLoading = () => {
-    clearInterval(progressInterval);
-    clearInterval(checkInterval);
-    progressBar.style.transition = "width 300ms ease-in-out";
-    progressBar.style.width = "100%";
-    unfilledBar.style.width = "0%";
-
-    progressBar.addEventListener("transitionend", () => {
-      requestAnimationFrame(() => {
-        const loader = document.querySelector(".bar-loading");
-        if (loader) {
-          loader.style.opacity = "0";
-          setTimeout(() => {
-            loader.remove();
-          }, 300);
-        }
-      });
-    });
-  };
 };
 
 /**
@@ -272,6 +287,21 @@ const resetSlideshowState = () => {
 
   if (STATE.slideshow.slideInterval) {
     STATE.slideshow.slideInterval.stop();
+  }
+
+  // Destroy all video players
+  if (STATE.slideshow.videoPlayers) {
+    Object.values(STATE.slideshow.videoPlayers).forEach(player => {
+      if (player && typeof player.destroy === 'function') {
+        player.destroy();
+      }
+    });
+    STATE.slideshow.videoPlayers = {};
+  }
+
+  if (STATE.slideshow.sponsorBlockInterval) {
+    clearInterval(STATE.slideshow.sponsorBlockInterval);
+    STATE.slideshow.sponsorBlockInterval = null;
   }
 
   const container = document.getElementById("slides-container");
@@ -350,6 +380,7 @@ const waitForApiClientAndInitialize = () => {
         initJellyfinData(async () => {
           console.log("✅ Jellyfin API client initialized successfully");
           await initLocalization();
+          await fetchPluginConfig();
           slidesInit();
         });
       } else {
@@ -361,6 +392,38 @@ const waitForApiClientAndInitialize = () => {
       );
     }
   }, CONFIG.retryInterval);
+};
+
+const fetchPluginConfig = async () => {
+  try {
+    const response = await fetch('/MediaBarEnhanced/Config');
+    if (response.ok) {
+      const pluginConfig = await response.json();
+      if (pluginConfig) {
+        for (const key in pluginConfig) {
+          const camelKey = key.charAt(0).toLowerCase() + key.slice(1);
+          if (CONFIG.hasOwnProperty(camelKey)) {
+            CONFIG[camelKey] = pluginConfig[key];
+          }
+        }
+        STATE.slideshow.isMuted = CONFIG.startMuted;
+
+        if (!CONFIG.enableLoadingScreen) {
+          const loader = document.querySelector(".bar-loading");
+          if (loader) {
+            loader.remove();
+          }
+        }
+
+        // Sync to LocalStorage for next load
+        localStorage.setItem('mediaBarEnhanced_enableLoadingScreen', CONFIG.enableLoadingScreen);
+
+        console.log("✅ MediaBarEnhanced config loaded", CONFIG);
+      }
+    }
+  } catch (e) {
+    console.error("Failed to load MediaBarEnhanced config", e);
+  }
 };
 
 waitForApiClientAndInitialize();
@@ -486,6 +549,119 @@ const SlideUtils = {
     });
     return loadingIndicator;
   },
+
+  /**
+   * Loads the YouTube IFrame API if not already loaded
+   * @returns {Promise<void>}
+   */
+  loadYouTubeIframeAPI() {
+    return new Promise((resolve) => {
+      if (window.YT && window.YT.Player) {
+        resolve();
+        return;
+      }
+
+      const tag = document.createElement('script');
+      tag.src = "https://www.youtube.com/iframe_api";
+      const firstScriptTag = document.getElementsByTagName('script')[0];
+      firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+      const previousOnYouTubeIframeAPIReady = window.onYouTubeIframeAPIReady;
+      window.onYouTubeIframeAPIReady = () => {
+        if (previousOnYouTubeIframeAPIReady) previousOnYouTubeIframeAPIReady();
+        resolve();
+      };
+    });
+  },
+
+  /**
+   * Opens a modal video player
+   * @param {string} url - Video URL
+   */
+  openVideoModal(url) {
+    const existingModal = document.getElementById('video-modal-overlay');
+    if (existingModal) existingModal.remove();
+
+    if (STATE.slideshow.slideInterval) {
+      STATE.slideshow.slideInterval.stop();
+    }
+    STATE.slideshow.isPaused = true;
+
+    const overlay = this.createElement('div', {
+      id: 'video-modal-overlay'
+    });
+
+    const closeModal = () => {
+      overlay.remove();
+      STATE.slideshow.isPaused = false;
+      if (STATE.slideshow.slideInterval) {
+        STATE.slideshow.slideInterval.start();
+      }
+    };
+
+    const closeButton = this.createElement('button', {
+      className: 'modal-close-button',
+      innerHTML: '<i class="material-icons">close</i>',
+      onclick: closeModal
+    });
+
+    const contentContainer = this.createElement('div', {
+      className: 'video-modal-content'
+    });
+
+    let videoId = null;
+    let isYoutube = false;
+
+    try {
+      const urlObj = new URL(url);
+      if (urlObj.hostname.includes('youtube.com') || urlObj.hostname.includes('youtu.be')) {
+        isYoutube = true;
+        videoId = urlObj.searchParams.get('v');
+        if (!videoId && urlObj.hostname.includes('youtu.be')) {
+          videoId = urlObj.pathname.substring(1);
+        }
+      }
+    } catch (e) {
+      console.warn("Invalid URL for modal:", url);
+    }
+
+    if (isYoutube && videoId) {
+      const playerDiv = this.createElement('div', { id: 'modal-yt-player' });
+      contentContainer.appendChild(playerDiv);
+      overlay.append(closeButton, contentContainer);
+      document.body.appendChild(overlay);
+
+      this.loadYouTubeIframeAPI().then(() => {
+        new YT.Player('modal-yt-player', {
+          height: '100%',
+          width: '100%',
+          videoId: videoId,
+          playerVars: {
+            autoplay: 1,
+            controls: 1,
+            iv_load_policy: 3,
+            rel: 0
+          }
+        });
+      });
+    } else {
+      const video = this.createElement('video', {
+        src: url,
+        controls: true,
+        autoplay: true,
+        className: 'video-modal-player'
+      });
+      contentContainer.appendChild(video);
+      overlay.append(closeButton, contentContainer);
+      document.body.appendChild(overlay);
+    }
+
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        closeModal();
+      }
+    });
+  },
 };
 
 /**
@@ -509,20 +685,51 @@ const LocalizationUtils = {
 
     let locale = null;
 
+    try {
+      if (window.ApiClient && typeof window.ApiClient.deviceId === 'function') {
+        const deviceId = window.ApiClient.deviceId();
+        if (deviceId) {
+          const deviceKey = `${deviceId}-language`;
+          locale = localStorage.getItem(deviceKey).toLowerCase();
+        }
+      }
+      if (!locale) {
+        locale = localStorage.getItem("language").toLowerCase();
+      }
+    } catch (e) {
+      console.warn("Could not access localStorage for language:", e);
+    }
+
+    if (!locale) {
+      const langAttr = document.documentElement.getAttribute("lang");
+      if (langAttr) {
+        locale = langAttr.toLowerCase();
+      }
+    }
+
     if (window.ApiClient && STATE.jellyfinData?.accessToken) {
       try {
-        const userData = window.ApiClient.getCurrentUser();
-        if (userData.Configuration?.AudioLanguagePreference) {
-          locale = userData.Configuration.AudioLanguagePreference.toLowerCase();
+        const userId = window.ApiClient.getCurrentUserId();
+        if (userId) {
+          const userUrl = window.ApiClient.getUrl(`Users/${userId}`);
+          const userResponse = await fetch(userUrl, {
+            headers: ApiUtils.getAuthHeaders(),
+          });
+          if (userResponse.ok) {
+            const userData = await userResponse.json();
+            if (userData.Configuration?.AudioLanguagePreference) {
+              locale = userData.Configuration.AudioLanguagePreference.toLowerCase();
+            }
+          }
         }
       } catch (error) {
-        console.warn("Could not fetch user language preference:", error);
+        console.warn("Could not fetch user audio language preference:", error);
       }
     }
 
     if (!locale && window.ApiClient && STATE.jellyfinData?.accessToken) {
       try {
-        const configUrl = window.ApiClient.getUrl("System/Configuration");
+        const configUrl = window.ApiClient.getUrl('System/Configuration');
         const configResponse = await fetch(configUrl, {
           headers: ApiUtils.getAuthHeaders(),
         });
@@ -536,14 +743,7 @@ const LocalizationUtils = {
           }
         }
       } catch (error) {
-        console.warn("Could not fetch server language preference:", error);
-      }
-    }
-
-    if (!locale) {
-      const langAttr = document.documentElement.getAttribute("lang");
-      if (langAttr) {
-        locale = langAttr.toLowerCase();
+        console.warn("Could not fetch server metadata language preference:", error);
       }
     }
 
@@ -555,10 +755,7 @@ const LocalizationUtils = {
     // Convert 3-letter country codes to 2-letter if necessary
     if (locale.length === 3) {
       const countriesData = await window.ApiClient.getCountries();
-      const countryData = Object.values(countriesData).find(
-        (countryData) =>
-          countryData.ThreeLetterISORegionName === locale.toUpperCase()
-      );
+      const countryData = Object.values(countriesData).find(countryData => countryData.ThreeLetterISORegionName === locale.toUpperCase());
       if (countryData) {
         locale = countryData.TwoLetterISORegionName.toLowerCase();
       }
@@ -574,7 +771,7 @@ const LocalizationUtils = {
    * @returns {string|null} URL to translation chunk or null
    */
   findTranslationChunkUrl(locale) {
-    const localePrefix = locale.split("-")[0];
+    const localePrefix = locale.split('-')[0];
 
     if (this.chunkUrlCache[localePrefix]) {
       return this.chunkUrlCache[localePrefix];
@@ -582,14 +779,10 @@ const LocalizationUtils = {
 
     if (window.performance && window.performance.getEntriesByType) {
       try {
-        const resources = window.performance.getEntriesByType("resource");
+        const resources = window.performance.getEntriesByType('resource');
         for (const resource of resources) {
           const url = resource.name || resource.url;
-          if (
-            url &&
-            url.includes(`${localePrefix}-json`) &&
-            url.includes(".chunk.js")
-          ) {
+          if (url && url.includes(`${localePrefix}-json`) && url.includes('.chunk.js')) {
             this.chunkUrlCache[localePrefix] = url;
             return url;
           }
@@ -624,9 +817,7 @@ const LocalizationUtils = {
 
         const response = await fetch(chunkUrl);
         if (!response.ok) {
-          throw new Error(
-            `Failed to fetch translations: ${response.statusText}`
-          );
+          throw new Error(`Failed to fetch translations: ${response.statusText}`);
         }
 
         const chunkText = await response.text();
@@ -635,8 +826,8 @@ const LocalizationUtils = {
         if (jsonMatch) {
           let jsonString = jsonMatch[1]
             .replace(/\\"/g, '"')
-            .replace(/\\n/g, "\n")
-            .replace(/\\\\/g, "\\")
+            .replace(/\\n/g, '\n')
+            .replace(/\\\\/g, '\\')
             .replace(/\\'/g, "'");
           try {
             this.translations[locale] = JSON.parse(jsonString);
@@ -646,8 +837,8 @@ const LocalizationUtils = {
           }
         }
 
-        const jsonStart = chunkText.indexOf("{");
-        const jsonEnd = chunkText.lastIndexOf("}") + 1;
+        const jsonStart = chunkText.indexOf('{');
+        const jsonEnd = chunkText.lastIndexOf('}') + 1;
         if (jsonStart !== -1 && jsonEnd > jsonStart) {
           const jsonString = chunkText.substring(jsonStart, jsonEnd);
           try {
@@ -675,17 +866,17 @@ const LocalizationUtils = {
    * @returns {string} Localized string or fallback
    */
   getLocalizedString(key, fallback, ...args) {
-    const locale = this.cachedLocale || "en-us";
+    const locale = this.cachedLocale || 'en-us';
     let translated = this.translations[locale]?.[key] || fallback;
 
     if (args.length > 0) {
       for (let i = 0; i < args.length; i++) {
-        translated = translated.replace(new RegExp(`\\{${i}\\}`, "g"), args[i]);
+        translated = translated.replace(new RegExp(`\\{${i}\\}`, 'g'), args[i]);
       }
     }
 
     return translated;
-  },
+  }
 };
 
 /**
@@ -705,6 +896,7 @@ const ApiUtils = {
 
       const response = await fetch(
         `${STATE.jellyfinData.serverAddress}/Items/${itemId}`,
+        // `${STATE.jellyfinData.serverAddress}/Users/${STATE.jellyfinData.userId}/Items/${itemId}?Fields=Overview,RemoteTrailers,Genres,CommunityRating,CriticRating,OfficialRating,PremiereDate,RunTimeTicks,ProductionYear,MediaSources`,
         {
           headers: this.getAuthHeaders(),
         }
@@ -729,6 +921,7 @@ const ApiUtils = {
    * Fetch item IDs from the list file
    * @returns {Promise<Array>} Array of item IDs
    */
+  // MARK: LIST FILE
   async fetchItemIdsFromList() {
     try {
       const listFileName = `${STATE.jellyfinData.serverAddress}/web/avatars/list.txt?userId=${STATE.jellyfinData.userId}`;
@@ -853,8 +1046,7 @@ const ApiUtils = {
   async getSessionId() {
     try {
       const response = await fetch(
-        `${
-          STATE.jellyfinData.serverAddress
+        `${STATE.jellyfinData.serverAddress
         }/Sessions?deviceId=${encodeURIComponent(STATE.jellyfinData.deviceId)}`,
         {
           headers: this.getAuthHeaders(),
@@ -908,6 +1100,95 @@ const ApiUtils = {
       console.error("Error toggling favorite:", error);
     }
   },
+
+  /**
+   * Fetches SponsorBlock segments for a YouTube video
+   * @param {string} videoId - YouTube Video ID
+   * @returns {Promise<Object>} Object containing intro and outro segments
+   */
+  async fetchSponsorBlockData(videoId) {
+    if (!CONFIG.useSponsorBlock) return { intro: null, outro: null };
+    try {
+      const response = await fetch(`https://sponsor.ajay.app/api/skipSegments?videoID=${videoId}&categories=["intro","outro"]`);
+      if (!response.ok) return { intro: null, outro: null };
+
+      const segments = await response.json();
+      let intro = null;
+      let outro = null;
+
+      segments.forEach(segment => {
+        if (segment.category === "intro" && Array.isArray(segment.segment)) {
+          intro = segment.segment;
+        } else if (segment.category === "outro" && Array.isArray(segment.segment)) {
+          outro = segment.segment;
+        }
+      });
+
+      return { intro, outro };
+    } catch (error) {
+      console.warn('Error fetching SponsorBlock data:', error);
+      return { intro: null, outro: null };
+    }
+  },
+
+  /**
+   * Searches for a Collection or Playlist by name
+   * @param {string} name - Name to search for
+   * @returns {Promise<string|null>} ID of the first match or null
+   */
+  async findCollectionOrPlaylistByName(name) {
+    try {
+      const response = await fetch(
+        `${STATE.jellyfinData.serverAddress}/Items?IncludeItemTypes=BoxSet,Playlist&Recursive=true&searchTerm=${encodeURIComponent(name)}&Limit=1&fields=Id&userId=${STATE.jellyfinData.userId}`,
+        {
+          headers: this.getAuthHeaders(),
+        }
+      );
+
+      if (!response.ok) {
+        console.warn(`Failed to search for '${name}'`);
+        return null;
+      }
+
+      const data = await response.json();
+      if (data.Items && data.Items.length > 0) {
+        return data.Items[0].Id;
+      }
+      return null;
+    } catch (error) {
+      console.error(`Error searching for '${name}':`, error);
+      return null;
+    }
+  },
+
+  /**
+   * Fetches items belonging to a collection (BoxSet)
+   * @param {string} collectionId - ID of the collection
+   * @returns {Promise<Array>} Array of item IDs
+   */
+  async fetchCollectionItems(collectionId) {
+    try {
+      const response = await fetch(
+        `${STATE.jellyfinData.serverAddress}/Items?ParentId=${collectionId}&Recursive=true&IncludeItemTypes=Movie,Series&fields=Id&userId=${STATE.jellyfinData.userId}`,
+        {
+          headers: this.getAuthHeaders(),
+        }
+      );
+
+      if (!response.ok) {
+        console.warn(`Failed to fetch collection items for ${collectionId}`);
+        return [];
+      }
+
+      const data = await response.json();
+      const items = data.Items || [];
+      console.log(`Resolved collection ${collectionId} to ${items.length} items`);
+      return items.map(i => i.Id);
+    } catch (error) {
+      console.error(`Error fetching collection items for ${collectionId}:`, error);
+      return [];
+    }
+  }
 };
 
 /**
@@ -1020,11 +1301,7 @@ const SlideCreator = {
     // Handle Backdrop images
     if (imageType === "Backdrop") {
       // Check BackdropImageTags array first
-      if (
-        item.BackdropImageTags &&
-        Array.isArray(item.BackdropImageTags) &&
-        item.BackdropImageTags.length > 0
-      ) {
+      if (item.BackdropImageTags && Array.isArray(item.BackdropImageTags) && item.BackdropImageTags.length > 0) {
         const backdropIndex = index !== undefined ? index : 0;
         if (backdropIndex < item.BackdropImageTags.length) {
           tag = item.BackdropImageTags[backdropIndex];
@@ -1052,7 +1329,7 @@ const SlideCreator = {
     // Build URL with tag and quality if tag is available, otherwise quality-only fallback
     if (tag) {
       // Use both tag and quality for cacheable, quality-controlled images
-      const qualityParam = quality !== undefined ? `&quality=${quality}` : "";
+      const qualityParam = quality !== undefined ? `&quality=${quality}` : '';
       return `${baseUrl}?tag=${tag}${qualityParam}`;
     } else {
       // Fallback to quality-only URL if no tag is available
@@ -1084,19 +1361,188 @@ const SlideCreator = {
       "data-item-id": itemId,
     });
 
-    const backdrop = SlideUtils.createElement("img", {
-      className: "backdrop high-quality",
-      src: this.buildImageUrl(item, "Backdrop", 0, serverAddress, 60),
-      alt: LocalizationUtils.getLocalizedString("Backdrop", "Backdrop"),
-      loading: "eager",
-    });
+    let backdrop;
+    let isVideo = false;
+    let trailerUrl = null;
+
+    // 1. Check for Remote Trailers (YouTube)
+    if (item.RemoteTrailers && item.RemoteTrailers.length > 0) {
+      trailerUrl = item.RemoteTrailers[0].Url;
+    }
+
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    const shouldPlayVideo = CONFIG.enableVideoBackdrop && (!isMobile || CONFIG.enableMobileVideo);
+
+    if (trailerUrl && shouldPlayVideo) {
+      let isYoutube = false;
+      let videoId = null;
+
+      try {
+        const urlObj = new URL(trailerUrl);
+        if (urlObj.hostname.includes('youtube.com') || urlObj.hostname.includes('youtu.be')) {
+          isYoutube = true;
+          videoId = urlObj.searchParams.get('v');
+          if (!videoId && urlObj.hostname.includes('youtu.be')) {
+            videoId = urlObj.pathname.substring(1);
+          }
+        }
+      } catch (e) {
+        console.warn("Invalid trailer URL:", trailerUrl);
+      }
+
+      if (isYoutube && videoId) {
+        isVideo = true;
+        // Create container for YouTube API
+        const videoClass = CONFIG.fullWidthVideo ? "video-backdrop-full" : "video-backdrop-default";
+
+        backdrop = SlideUtils.createElement("div", {
+          className: `backdrop video-backdrop ${videoClass}`,
+          id: `youtube-player-${itemId}`
+        });
+
+        // Initialize YouTube Player
+        SlideUtils.loadYouTubeIframeAPI().then(() => {
+          // Fetch SponsorBlock data
+          ApiUtils.fetchSponsorBlockData(videoId).then(segments => {
+            const playerVars = {
+              autoplay: 0,
+              mute: STATE.slideshow.isMuted ? 1 : 0,
+              controls: 0,
+              disablekb: 1,
+              fs: 0,
+              iv_load_policy: 3,
+              rel: 0,
+              loop: 0
+            };
+
+            // Apply SponsorBlock start/end times
+            if (segments.intro) {
+              playerVars.start = Math.ceil(segments.intro[1]);
+              console.info(`SponsorBlock intro detected for video ${videoId}: skipping to ${playerVars.start}s`);
+            }
+            if (segments.outro) {
+              playerVars.end = Math.floor(segments.outro[0]);
+              console.info(`SponsorBlock outro detected for video ${videoId}: ending at ${playerVars.end}s`);
+            }
+
+            STATE.slideshow.videoPlayers[itemId] = new YT.Player(`youtube-player-${itemId}`, {
+              height: '100%',
+              width: '100%',
+              videoId: videoId,
+              playerVars: playerVars,
+              events: {
+                'onReady': (event) => {
+                  // Store start/end time and videoId for later use
+                  event.target._startTime = playerVars.start || 0;
+                  event.target._endTime = playerVars.end || undefined;
+                  event.target._videoId = videoId;
+
+                  if (STATE.slideshow.isMuted) {
+                    event.target.mute();
+                  } else {
+                    event.target.unMute();
+                    event.target.setVolume(40);
+                  }
+
+                  // Only play if this is the active slide
+                  const slide = document.querySelector(`.slide[data-item-id="${itemId}"]`);
+                  if (slide && slide.classList.contains('active')) {
+                    event.target.playVideo();
+                    // Check if it actually started playing after a short delay (handling autoplay blocks)
+                    setTimeout(() => {
+                      if (event.target.getPlayerState() !== YT.PlayerState.PLAYING &&
+                        event.target.getPlayerState() !== YT.PlayerState.BUFFERING) {
+                        console.warn(`Autoplay blocked for ${itemId}, attempting muted fallback`);
+                        event.target.mute();
+                        event.target.playVideo();
+                      }
+                    }, 1000);
+
+                    // Pause slideshow timer when video starts if configured
+                    if (CONFIG.waitForTrailerToEnd && STATE.slideshow.slideInterval) {
+                      STATE.slideshow.slideInterval.stop();
+                    }
+                  }
+                },
+                'onStateChange': (event) => {
+                  if (event.data === YT.PlayerState.ENDED) {
+                    if (CONFIG.waitForTrailerToEnd) {
+                      SlideshowManager.nextSlide();
+                    } else {
+                      event.target.playVideo(); // Loop if not waiting for end if trailer is shorter than slide duration
+                    }
+                  }
+                },
+                'onError': () => {
+                  // Fallback to next slide on error
+                  if (CONFIG.waitForTrailerToEnd) {
+                    SlideshowManager.nextSlide();
+                  }
+                }
+              }
+            });
+          });
+        });
+
+        // 2. Check for local video trailers in MediaSources if yt is not available
+      } else if (!isYoutube) {
+        isVideo = true;
+
+        const videoAttributes = {
+          className: "backdrop video-backdrop",
+          src: trailerUrl,
+          autoplay: false,
+          loop: false,
+          style: "object-fit: cover; width: 100%; height: 100%; pointer-events: none;"
+        };
+
+        if (STATE.slideshow.isMuted) {
+          videoAttributes.muted = "";
+        }
+
+        backdrop = SlideUtils.createElement("video", videoAttributes);
+
+        if (!STATE.slideshow.isMuted) {
+          backdrop.volume = 0.4;
+        }
+
+        STATE.slideshow.videoPlayers[itemId] = backdrop;
+
+        backdrop.addEventListener('play', () => {
+          if (CONFIG.waitForTrailerToEnd && STATE.slideshow.slideInterval) {
+            STATE.slideshow.slideInterval.stop();
+          }
+        });
+
+        backdrop.addEventListener('ended', () => {
+          if (CONFIG.waitForTrailerToEnd) {
+            SlideshowManager.nextSlide();
+          }
+        });
+
+        backdrop.addEventListener('error', () => {
+          if (CONFIG.waitForTrailerToEnd) {
+            SlideshowManager.nextSlide();
+          }
+        });
+      }
+    }
+
+    if (!isVideo) {
+      backdrop = SlideUtils.createElement("img", {
+        className: "backdrop high-quality",
+        src: this.buildImageUrl(item, "Backdrop", 0, serverAddress, 60),
+        alt: LocalizationUtils.getLocalizedString('Backdrop', 'Backdrop'),
+        loading: "eager",
+      });
+    }
 
     const backdropOverlay = SlideUtils.createElement("div", {
       className: "backdrop-overlay",
     });
 
     const backdropContainer = SlideUtils.createElement("div", {
-      className: "backdrop-container",
+      className: "backdrop-container" + (isVideo && CONFIG.fullWidthVideo ? " full-width-video" : ""),
     });
     backdropContainer.append(backdrop, backdropOverlay);
 
@@ -1136,7 +1582,7 @@ const SlideCreator = {
     plotContainer.appendChild(plotElement);
 
     const gradientOverlay = SlideUtils.createElement("div", {
-      className: "gradient-overlay",
+      className: "gradient-overlay" + (isVideo && CONFIG.fullWidthVideo ? " full-width-video" : ""),
     });
 
     const infoContainer = SlideUtils.createElement("div", {
@@ -1148,7 +1594,7 @@ const SlideCreator = {
 
     const genreElement = SlideUtils.createElement("div", {
       className: "genre",
-      innerHTML: SlideUtils.parseGenres(item.Genres),
+      innerHTML: SlideUtils.parseGenres(item.Genres)
     });
 
     const buttonContainer = SlideUtils.createElement("div", {
@@ -1158,7 +1604,13 @@ const SlideCreator = {
     const playButton = this.createPlayButton(itemId);
     const detailButton = this.createDetailButton(itemId);
     const favoriteButton = this.createFavoriteButton(item);
-    buttonContainer.append(detailButton, playButton, favoriteButton);
+
+    if (trailerUrl && !isVideo && CONFIG.showTrailerButton) {
+      const trailerButton = this.createTrailerButton(trailerUrl);
+      buttonContainer.append(detailButton, playButton, trailerButton, favoriteButton);
+    } else {
+      buttonContainer.append(detailButton, playButton, favoriteButton);
+    }
 
     slide.append(
       logoContainer,
@@ -1197,9 +1649,7 @@ const SlideCreator = {
     if (typeof communityRating === "number") {
       const container = SlideUtils.createElement("div", {
         className: "star-rating-container",
-        innerHTML: `<span class="material-icons community-rating-star star" aria-hidden="true"></span>${communityRating.toFixed(
-          1
-        )}`,
+        innerHTML: `<span class="material-icons community-rating-star star" aria-hidden="true"></span>${communityRating.toFixed(1)}`,
       });
       miscInfo.appendChild(container);
       miscInfo.appendChild(SlideUtils.createSeparator());
@@ -1207,17 +1657,14 @@ const SlideCreator = {
 
     // Critic Rating Section (Rotten Tomatoes)
     if (typeof criticRating === "number") {
-      const svgIcon =
-        criticRating < 60
-          ? CONFIG.IMAGE_SVG.rottenTomato
-          : CONFIG.IMAGE_SVG.freshTomato;
+      const svgIcon = criticRating < 60 ? CONFIG.IMAGE_SVG.rottenTomato : CONFIG.IMAGE_SVG.freshTomato;
       const container = SlideUtils.createElement("div", {
         className: "critic-rating",
         innerHTML: `${svgIcon}${criticRating.toFixed(0)}%`,
-      });
+      })
       miscInfo.appendChild(container);
       miscInfo.appendChild(SlideUtils.createSeparator());
-    }
+    };
 
     // Year Section
     if (typeof premiereDate === "string" && !isNaN(new Date(premiereDate))) {
@@ -1227,7 +1674,7 @@ const SlideCreator = {
       });
       miscInfo.appendChild(container);
       miscInfo.appendChild(SlideUtils.createSeparator());
-    }
+    };
 
     // Age Rating Section
     if (typeof ageRating === "string") {
@@ -1240,7 +1687,7 @@ const SlideCreator = {
       });
       miscInfo.appendChild(container);
       miscInfo.appendChild(SlideUtils.createSeparator());
-    }
+    };
 
     // Runtime / Seasons Section
     if (seasonCount !== undefined || runtime !== undefined) {
@@ -1248,13 +1695,7 @@ const SlideCreator = {
         className: "runTime",
       });
       if (seasonCount) {
-        const seasonText =
-          seasonCount <= 1
-            ? LocalizationUtils.getLocalizedString("Season", "Season")
-            : LocalizationUtils.getLocalizedString(
-                "TypeOptionPluralSeason",
-                "Seasons"
-              );
+        const seasonText = seasonCount <= 1 ? LocalizationUtils.getLocalizedString('Season', 'Season') : LocalizationUtils.getLocalizedString('TypeOptionPluralSeason', 'Seasons');
         container.innerHTML = `${seasonCount} ${seasonText}`;
       } else {
         const milliseconds = runtime / 10000;
@@ -1262,11 +1703,7 @@ const SlideCreator = {
         const endTime = new Date(currentTime.getTime() + milliseconds);
         const options = { hour: "2-digit", minute: "2-digit", hour12: false };
         const formattedEndTime = endTime.toLocaleTimeString([], options);
-        const endsAtText = LocalizationUtils.getLocalizedString(
-          "EndsAtValue",
-          "Ends at {0}",
-          formattedEndTime
-        );
+        const endsAtText = LocalizationUtils.getLocalizedString('EndsAtValue', 'Ends at {0}', formattedEndTime);
         container.innerText = endsAtText;
       }
       miscInfo.appendChild(container);
@@ -1281,7 +1718,7 @@ const SlideCreator = {
    * @returns {HTMLElement} Play button element
    */
   createPlayButton(itemId) {
-    const playText = LocalizationUtils.getLocalizedString("Play", "Play");
+    const playText = LocalizationUtils.getLocalizedString('Play', 'Play');
     return SlideUtils.createElement("button", {
       className: "detailButton btnPlay play-button",
       innerHTML: `
@@ -1342,6 +1779,26 @@ const SlideCreator = {
   },
 
   /**
+   * Creates a trailer button
+   * @param {string} url - Trailer URL
+   * @returns {HTMLElement} Trailer button element
+   */
+  createTrailerButton(url) {
+    const trailerText = LocalizationUtils.getLocalizedString('Trailer', 'Trailer');
+    return SlideUtils.createElement("button", {
+      className: "detailButton trailer-button",
+      innerHTML: `<span class="material-icons">movie</span> <span class="trailer-text">${trailerText}</span>`,
+      tabIndex: "0",
+      onclick: (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        SlideUtils.openVideoModal(url);
+      },
+    });
+  },
+
+
+  /**
    * Creates a placeholder slide for loading
    * @param {string} itemId - Item ID to load
    * @returns {HTMLElement} Placeholder slide element
@@ -1399,6 +1856,7 @@ const SlideCreator = {
  * Manages slideshow functionality
  */
 const SlideshowManager = {
+
   createPaginationDots() {
     let dotsContainer = document.querySelector(".dots-container");
     if (!dotsContainer) {
@@ -1407,12 +1865,24 @@ const SlideshowManager = {
       document.getElementById("slides-container").appendChild(dotsContainer);
     }
 
-    for (let i = 0; i < 5; i++) {
-      const dot = document.createElement("span");
-      dot.className = "dot";
-      dot.setAttribute("data-index", i);
-      dotsContainer.appendChild(dot);
+    const totalItems = STATE.slideshow.totalItems || 0;
+
+    // Switch to counter style if too many items
+    if (totalItems > CONFIG.maxPaginationDots) {
+      const counter = document.createElement("span");
+      counter.className = "slide-counter";
+      counter.id = "slide-counter";
+      dotsContainer.appendChild(counter);
+    } else {
+      // Create dots for all items
+      for (let i = 0; i < totalItems; i++) {
+        const dot = document.createElement("span");
+        dot.className = "dot";
+        dot.setAttribute("data-index", i);
+        dotsContainer.appendChild(dot);
+      }
     }
+
     this.updateDots();
   },
 
@@ -1421,24 +1891,25 @@ const SlideshowManager = {
    * Maps current slide to one of the 5 dots
    */
   updateDots() {
-    const container = SlideUtils.getOrCreateSlidesContainer();
-    const dots = container.querySelectorAll(".dot");
     const currentIndex = STATE.slideshow.currentSlideIndex;
-    const totalItems = STATE.slideshow.totalItems;
-    const numDots = dots.length;
+    const totalItems = STATE.slideshow.totalItems || 0;
 
-    let activeDotIndex;
-
-    if (totalItems <= numDots) {
-      activeDotIndex = currentIndex;
-    } else {
-      activeDotIndex = Math.floor(
-        (currentIndex % numDots) * (numDots / numDots)
-      );
+    // Handle Large List Counter
+    const counter = document.getElementById("slide-counter");
+    if (counter) {
+      counter.textContent = `${currentIndex + 1} / ${totalItems}`;
+      return;
     }
 
+    // Handle Dots
+    const container = SlideUtils.getOrCreateSlidesContainer();
+    const dots = container.querySelectorAll(".dot");
+
+    // Fallback if dots exist but totalItems matched counter mode
+    if (dots.length === 0) return;
+
     dots.forEach((dot, index) => {
-      if (index === activeDotIndex) {
+      if (index === currentIndex) {
         dot.classList.add("active");
       } else {
         dot.classList.remove("active");
@@ -1489,8 +1960,97 @@ const SlideshowManager = {
 
       currentSlide.classList.add("active");
 
+      // Manage Video Playback: Stop others, Play current
+
+      // 1. Pause all other YouTube players
+      if (STATE.slideshow.videoPlayers) {
+        Object.keys(STATE.slideshow.videoPlayers).forEach(id => {
+          if (id !== currentItemId) {
+            const p = STATE.slideshow.videoPlayers[id];
+            if (p && typeof p.pauseVideo === 'function') {
+              p.pauseVideo();
+            }
+          }
+        });
+      }
+
+      // 2. Pause all other HTML5 videos e.g. local trailers
+      document.querySelectorAll('video').forEach(video => {
+        if (!video.closest(`.slide[data-item-id="${currentItemId}"]`)) {
+          video.pause();
+        }
+      });
+
+      // 3. Play and Reset current video
+      const videoBackdrop = currentSlide.querySelector('.video-backdrop');
+
+      // Update mute button visibility
+      const muteButton = document.querySelector('.mute-button');
+      if (muteButton) {
+        const hasVideo = !!videoBackdrop;
+        muteButton.style.display = hasVideo ? 'block' : 'none';
+      }
+
+      if (videoBackdrop) {
+        if (videoBackdrop.tagName === 'VIDEO') {
+          videoBackdrop.currentTime = 0;
+
+          videoBackdrop.muted = STATE.slideshow.isMuted;
+          if (!STATE.slideshow.isMuted) {
+            videoBackdrop.volume = 0.4;
+          }
+
+          videoBackdrop.play().catch(e => {
+            // Check if it actually started playing after a short delay (handling autoplay blocks)
+            setTimeout(() => {
+              if (videoBackdrop.paused) {
+                console.warn(`Autoplay blocked for ${itemId}, attempting muted fallback`);
+                videoBackdrop.muted = true;
+                videoBackdrop.play().catch(err => console.error("Muted fallback failed", err));
+              }
+            }, 1000);
+          });
+        } else if (STATE.slideshow.videoPlayers && STATE.slideshow.videoPlayers[currentItemId]) {
+          const player = STATE.slideshow.videoPlayers[currentItemId];
+          if (player && typeof player.loadVideoById === 'function' && player._videoId) {
+            // Use loadVideoById to enforce start and end times
+            player.loadVideoById({
+              videoId: player._videoId,
+              startSeconds: player._startTime || 0,
+              endSeconds: player._endTime
+            });
+
+            if (STATE.slideshow.isMuted) {
+              player.mute();
+            } else {
+              player.unMute();
+              player.setVolume(40);
+            }
+
+            // Check if playback successfully started, otherwise fallback to muted
+            setTimeout(() => {
+              if (player.getPlayerState &&
+                player.getPlayerState() !== YT.PlayerState.PLAYING &&
+                player.getPlayerState() !== YT.PlayerState.BUFFERING) {
+                console.log("YouTube loadVideoById didn't start playback, retrying muted...");
+                player.mute();
+                player.playVideo();
+              }
+            }, 1000);
+          } else if (player && typeof player.seekTo === 'function') {
+            // Fallback if loadVideoById is not available or videoId missing
+            const startTime = player._startTime || 0;
+            player.seekTo(startTime);
+            player.playVideo();
+          }
+        }
+      }
+
       if (CONFIG.slideAnimationEnabled) {
-        currentSlide.querySelector(".backdrop").classList.add("animate");
+        const backdrop = currentSlide.querySelector(".backdrop");
+        if (backdrop && !backdrop.classList.contains("video-backdrop")) {
+          backdrop.classList.add("animate");
+        }
         currentSlide.querySelector(".logo").classList.add("animate");
       }
 
@@ -1515,8 +2075,14 @@ const SlideshowManager = {
       this.preloadAdjacentSlides(index);
       this.updateDots();
 
+      // Only restart interval if we are NOT waiting for a video to end
+      const hasVideo = currentSlide.querySelector('.video-backdrop');
       if (STATE.slideshow.slideInterval && !STATE.slideshow.isPaused) {
-        STATE.slideshow.slideInterval.restart();
+        if (CONFIG.waitForTrailerToEnd && hasVideo) {
+          STATE.slideshow.slideInterval.stop();
+        } else {
+          STATE.slideshow.slideInterval.restart();
+        }
       }
 
       this.pruneSlideCache();
@@ -1612,6 +2178,15 @@ const SlideshowManager = {
 
       const distance = Math.abs(index - currentIndex);
       if (distance > keepRange) {
+        // Destroy video player if exists
+        if (STATE.slideshow.videoPlayers[itemId]) {
+          const player = STATE.slideshow.videoPlayers[itemId];
+          if (typeof player.destroy === 'function') {
+            player.destroy();
+          }
+          delete STATE.slideshow.videoPlayers[itemId];
+        }
+
         delete STATE.slideshow.loadedItems[itemId];
 
         const slide = document.querySelector(
@@ -1626,22 +2201,117 @@ const SlideshowManager = {
     });
   },
 
+  toggleMute() {
+    STATE.slideshow.isMuted = !STATE.slideshow.isMuted;
+    const isUnmuting = !STATE.slideshow.isMuted;
+    const muteButton = document.querySelector('.mute-button');
+
+    const updateIcon = () => {
+      if (!muteButton) return;
+      const isMuted = STATE.slideshow.isMuted;
+      muteButton.innerHTML = `<i class="material-icons">${isMuted ? 'volume_off' : 'volume_up'}</i>`;
+      const label = isMuted ? 'Unmute' : 'Mute';
+      muteButton.setAttribute("aria-label", LocalizationUtils.getLocalizedString(label, label));
+      muteButton.setAttribute("title", LocalizationUtils.getLocalizedString(label, label));
+    };
+
+    const currentItemId = STATE.slideshow.itemIds[STATE.slideshow.currentSlideIndex];
+    const player = STATE.slideshow.videoPlayers ? STATE.slideshow.videoPlayers[currentItemId] : null;
+
+    if (currentItemId) {
+      const currentSlide = document.querySelector(`.slide[data-item-id="${currentItemId}"]`);
+      const video = currentSlide?.querySelector('video');
+
+      if (video) {
+        video.muted = STATE.slideshow.isMuted;
+        if (!STATE.slideshow.isMuted) {
+          video.volume = 0.4;
+        }
+
+        video.play().catch(error => {
+          console.warn("Unmuted play blocked, reverting to muted...");
+          STATE.slideshow.isMuted = true;
+          video.muted = true;
+          video.play();
+          updateIcon();
+        });
+      }
+
+      if (player && typeof player.playVideo === 'function') {
+        if (STATE.slideshow.isMuted) {
+          player.mute();
+        } else {
+          player.unMute();
+          player.setVolume(40);
+        }
+
+        player.playVideo();
+        if (isUnmuting) {
+          setTimeout(() => {
+            const state = player.getPlayerState();
+            if (state === 2) {
+              console.log("Video was paused after unmute...");
+              STATE.slideshow.isMuted = true;
+              player.mute();
+              player.playVideo();
+              updateIcon();
+            }
+          }, 300);
+        }
+      }
+    }
+
+    updateIcon();
+  },
+
   togglePause() {
     STATE.slideshow.isPaused = !STATE.slideshow.isPaused;
-    const pauseButton = document.querySelector(".pause-button");
+    const pauseButton = document.querySelector('.pause-button');
+
+    // Handle current video playback
+    const currentItemId = STATE.slideshow.itemIds[STATE.slideshow.currentSlideIndex];
+    const currentSlide = document.querySelector(`.slide[data-item-id="${currentItemId}"]`);
+
+    if (currentSlide) {
+      // Try YouTube player
+      const ytPlayer = STATE.slideshow.videoPlayers[currentItemId];
+      if (ytPlayer && typeof ytPlayer.getPlayerState === 'function') {
+        if (STATE.slideshow.isPaused) {
+          ytPlayer.pauseVideo();
+        } else {
+          ytPlayer.playVideo();
+        }
+      }
+
+      // Try HTML5 video
+      const html5Video = currentSlide.querySelector('video');
+      if (html5Video) {
+        if (STATE.slideshow.isPaused) {
+          html5Video.pause();
+        } else {
+          html5Video.play();
+        }
+      }
+    }
+
     if (STATE.slideshow.isPaused) {
       STATE.slideshow.slideInterval.stop();
       pauseButton.innerHTML = '<i class="material-icons">play_arrow</i>';
-      const playLabel = LocalizationUtils.getLocalizedString("Play", "Play");
+      const playLabel = LocalizationUtils.getLocalizedString('Play', 'Play');
       pauseButton.setAttribute("aria-label", playLabel);
       pauseButton.setAttribute("title", playLabel);
     } else {
-      STATE.slideshow.slideInterval.start();
+      // Only restart interval if we are NOT waiting for a video to end
+      const currentItemId = STATE.slideshow.itemIds[STATE.slideshow.currentSlideIndex];
+      const currentSlide = document.querySelector(`.slide[data-item-id="${currentItemId}"]`);
+      const hasVideo = currentSlide && currentSlide.querySelector('.video-backdrop');
+
+      if (!CONFIG.waitForTrailerToEnd || !hasVideo) {
+        STATE.slideshow.slideInterval.start();
+      }
+
       pauseButton.innerHTML = '<i class="material-icons">pause</i>';
-      const pauseLabel = LocalizationUtils.getLocalizedString(
-        "ButtonPause",
-        "Pause"
-      );
+      const pauseLabel = LocalizationUtils.getLocalizedString('ButtonPause', 'Pause');
       pauseButton.setAttribute("aria-label", pauseLabel);
       pauseButton.setAttribute("title", pauseLabel);
     }
@@ -1696,14 +2366,20 @@ const SlideshowManager = {
    * Initializes keyboard event listeners
    */
   initKeyboardEvents() {
+    if (!CONFIG.enableKeyboardControls) return;
+
     document.addEventListener("keydown", (e) => {
-      if (!STATE.slideshow.containerFocused) {
+      const container = document.getElementById("slides-container");
+      // Allow interaction if container is visible, even if not strictly focused
+      if (!container || container.style.display === "none") {
         return;
       }
 
+      const focusElement = document.activeElement;
+
       switch (e.key) {
         case "ArrowRight":
-          if (focusElement.classList.contains("detail-button")) {
+          if (focusElement && focusElement.classList.contains("detail-button")) {
             focusElement.previousElementSibling.focus();
           } else {
             SlideshowManager.nextSlide();
@@ -1712,7 +2388,7 @@ const SlideshowManager = {
           break;
 
         case "ArrowLeft":
-          if (focusElement.classList.contains("play-button")) {
+          if (focusElement && focusElement.classList.contains("play-button")) {
             focusElement.nextElementSibling.focus();
           } else {
             SlideshowManager.prevSlide();
@@ -1725,8 +2401,16 @@ const SlideshowManager = {
           e.preventDefault();
           break;
 
+        case "m": // Mute toggle
+        case "M":
+          this.toggleMute();
+          e.preventDefault();
+          break;
+
         case "Enter":
-          focusElement.click();
+          if (focusElement) {
+            focusElement.click();
+          }
           e.preventDefault();
           break;
       }
@@ -1744,15 +2428,144 @@ const SlideshowManager = {
   },
 
   /**
+   * Parses custom media IDs, handling seasonal content if enabled
+   * @returns {string[]} Array of media IDs
+   */
+  parseCustomIds() {
+    if (!CONFIG.enableSeasonalContent) {
+      return CONFIG.customMediaIds
+        .split(/[\n,]/)         // Split by comma or newline
+        .map((id) => id.trim()) // Remove whitespace
+        .filter((id) => id);    // Remove empty strings
+    } else {
+      return this.parseSeasonalIds();
+    }
+  },
+
+  /**
+   * Parses custom media IDs, handling seasonal content if enabled
+   * @returns {string[]} Array of media IDs
+   */
+  parseSeasonalIds() {
+    console.log("Using Seasonal Content Mode");
+    const lines = CONFIG.customMediaIds.split('\n');
+    const currentDate = new Date();
+    const currentMonth = currentDate.getMonth() + 1; // 1-12
+    const currentDay = currentDate.getDate(); // 1-31
+    const rawIds = [];
+
+    for (const line of lines) {
+      const match = line.match(/^\s*(\d{1,2})\.(\d{1,2})-(\d{1,2})\.(\d{1,2})\s*\|.*\|(.*)$/) ||
+        line.match(/^\s*(\d{1,2})\.(\d{1,2})-(\d{1,2})\.(\d{1,2})\s*\|(.*)$/);
+
+      if (match) {
+        const startDay = parseInt(match[1]);
+        const startMonth = parseInt(match[2]);
+        const endDay = parseInt(match[3]);
+        const endMonth = parseInt(match[4]);
+        const idsPart = match[5];
+
+        let isInRange = false;
+
+        if (startMonth === endMonth) {
+          if (currentMonth === startMonth && currentDay >= startDay && currentDay <= endDay) {
+            isInRange = true;
+          }
+        } else if (startMonth < endMonth) {
+          // Normal range spanning months (e.g. 15.06 - 15.08)
+          if (
+            (currentMonth > startMonth && currentMonth < endMonth) ||
+            (currentMonth === startMonth && currentDay >= startDay) ||
+            (currentMonth === endMonth && currentDay <= endDay)
+          ) {
+            isInRange = true;
+          }
+        } else {
+          // Wrap around year (e.g. 01.12 - 15.01)
+          if (
+            (currentMonth > startMonth || currentMonth < endMonth) ||
+            (currentMonth === startMonth && currentDay >= startDay) ||
+            (currentMonth === endMonth && currentDay <= endDay)
+          ) {
+            isInRange = true;
+          }
+        }
+
+        if (isInRange) {
+          console.log(`Seasonal match found: ${line}`);
+          const ids = idsPart.split(/[,]/).map(id => id.trim()).filter(id => id);
+          rawIds.push(...ids);
+        }
+      }
+    }
+    return rawIds;
+  },
+
+  /**
+   * Resolves a list of IDs, expanding collections (BoxSets) into their children
+   * @param {string[]} rawIds - List of input IDs
+   * @returns {Promise<string[]>} Flattened list of item IDs
+   */
+  async resolveCollectionsAndItems(rawIds) {
+    const finalIds = [];
+    const guidRegex = /^([0-9a-f]{32})$/i;
+
+    for (const rawId of rawIds) {
+      try {
+        let id = rawId;
+
+        // If not a valid GUID, treat as a name and search
+        if (!guidRegex.test(rawId)) {
+          console.log(`Input '${rawId}' is not a GUID, searching for Collection/Playlist by name...`);
+          const resolvedId = await ApiUtils.findCollectionOrPlaylistByName(rawId);
+
+          if (resolvedId) {
+            console.log(`Resolved name '${rawId}' to ID: ${resolvedId}`);
+            id = resolvedId;
+          } else {
+            console.warn(`Could not find Collection or Playlist with name: '${rawId}'`);
+            continue; // Skip if resolution failed
+          }
+        }
+
+        const item = await ApiUtils.fetchItemDetails(id);
+        if (item && (item.Type === 'BoxSet' || item.Type === 'Playlist')) {
+          console.log(`Found Collection/Playlist: ${id} (${item.Type}), fetching children...`);
+          const children = await ApiUtils.fetchCollectionItems(id);
+          finalIds.push(...children);
+        } else if (item) {
+          finalIds.push(id);
+        }
+      } catch (e) {
+        console.warn(`Error resolving item ${id}:`, e);
+      }
+    }
+    return finalIds;
+  },
+
+  /**
    * Loads slideshow data and initializes the slideshow
    */
   async loadSlideshowData() {
     try {
       STATE.slideshow.isLoading = true;
+      let itemIds = [];
 
-      let itemIds = await ApiUtils.fetchItemIdsFromList();
+      // 1. Try Custom Media/Collection IDs from Config & seasonal content
+      if (CONFIG.enableCustomMediaIds && CONFIG.customMediaIds) {
+        console.log("Using Custom Media IDs from configuration");
+        const rawIds = this.parseCustomIds();
+        itemIds = await this.resolveCollectionsAndItems(rawIds);
+      }
 
+      // 2. Try Avatar List (list.txt)
       if (itemIds.length === 0) {
+        itemIds = await ApiUtils.fetchItemIdsFromList();
+      }
+
+      // 3. Fallback to server query (Random)
+      if (itemIds.length === 0) {
+        console.log("No custom list found, fetching random items from server...");
         itemIds = await ApiUtils.fetchItemIdsFromServer();
       }
 
@@ -1766,10 +2579,24 @@ const SlideshowManager = {
       await this.updateCurrentSlide(0);
 
       STATE.slideshow.slideInterval = new SlideTimer(() => {
-        if (!STATE.slideshow.isPaused) {
-          this.nextSlide();
+        if (STATE.slideshow.isPaused) return;
+
+        if (CONFIG.waitForTrailerToEnd) {
+          const activeSlide = document.querySelector('.slide.active');
+          const hasActiveVideo = !!(activeSlide && activeSlide.querySelector('.video-backdrop'));
+          if (hasActiveVideo) return;
         }
+
+        this.nextSlide();
       }, CONFIG.shuffleInterval);
+
+      if (CONFIG.waitForTrailerToEnd && STATE.slideshow.slideInterval) {
+        const activeSlide = document.querySelector('.slide.active');
+        const hasActiveVideo = !!(activeSlide && activeSlide.querySelector('.video-backdrop'));
+        if (hasActiveVideo) {
+          STATE.slideshow.slideInterval.stop();
+        }
+      }
     } catch (error) {
       console.error("Error loading slideshow data:", error);
     } finally {
@@ -1820,18 +2647,43 @@ const initArrowNavigation = () => {
     className: "pause-button",
     innerHTML: '<i class="material-icons">pause</i>',
     tabIndex: "0",
-    "aria-label": LocalizationUtils.getLocalizedString("ButtonPause", "Pause"),
-    title: LocalizationUtils.getLocalizedString("ButtonPause", "Pause"),
+    "aria-label": LocalizationUtils.getLocalizedString('ButtonPause', 'Pause'),
+    title: LocalizationUtils.getLocalizedString('ButtonPause', 'Pause'),
     onclick: (e) => {
       e.preventDefault();
       e.stopPropagation();
       SlideshowManager.togglePause();
-    },
+    }
   });
+
+  // Prevent touch events from bubbling to container
+  pauseButton.addEventListener("touchstart", (e) => e.stopPropagation(), { passive: true });
+  pauseButton.addEventListener("touchend", (e) => e.stopPropagation(), { passive: true });
+  pauseButton.addEventListener("mousedown", (e) => e.stopPropagation());
+
+  const muteButton = SlideUtils.createElement("div", {
+    className: "mute-button",
+    innerHTML: STATE.slideshow.isMuted ? '<i class="material-icons">volume_off</i>' : '<i class="material-icons">volume_up</i>',
+    tabIndex: "0",
+    "aria-label": STATE.slideshow.isMuted ? LocalizationUtils.getLocalizedString('Unmute', 'Unmute') : LocalizationUtils.getLocalizedString('Mute', 'Mute'),
+    title: STATE.slideshow.isMuted ? LocalizationUtils.getLocalizedString('Unmute', 'Unmute') : LocalizationUtils.getLocalizedString('Mute', 'Mute'),
+    style: { display: "none" },
+    onclick: (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      SlideshowManager.toggleMute();
+    }
+  });
+
+  // Prevent touch events from bubbling to container
+  muteButton.addEventListener("touchstart", (e) => e.stopPropagation(), { passive: true });
+  muteButton.addEventListener("touchend", (e) => e.stopPropagation(), { passive: true });
+  muteButton.addEventListener("mousedown", (e) => e.stopPropagation());
 
   container.appendChild(leftArrow);
   container.appendChild(rightArrow);
   container.appendChild(pauseButton);
+  container.appendChild(muteButton);
 
   const showArrows = () => {
     leftArrow.style.display = "block";
@@ -1859,6 +2711,13 @@ const initArrowNavigation = () => {
   container.addEventListener("mouseenter", showArrows);
 
   container.addEventListener("mouseleave", hideArrows);
+
+  if (CONFIG.alwaysShowArrows) {
+    showArrows();
+    // Remove listeners to keep them shown
+    container.removeEventListener("mouseenter", showArrows);
+    container.removeEventListener("mouseleave", hideArrows);
+  }
 
   let arrowTimeout;
   container.addEventListener(
@@ -1963,13 +2822,13 @@ const slidesInit = async () => {
   try {
     console.log("🌟 Initializing Enhanced Jellyfin Slideshow");
 
+    initArrowNavigation();
+
     await SlideshowManager.loadSlideshowData();
 
     SlideshowManager.initTouchEvents();
 
     SlideshowManager.initKeyboardEvents();
-
-    initArrowNavigation();
 
     VisibilityObserver.init();
 
@@ -1980,7 +2839,7 @@ const slidesInit = async () => {
   }
 };
 
-window.slideshowPure = {
+window.mediaBarEnhanced = {
   CONFIG,
   STATE,
   SlideUtils,
@@ -2001,4 +2860,6 @@ window.slideshowPure = {
 
 initLoadingScreen();
 
-startLoginStatusWatcher();
+loadPluginConfig().then(() => {
+  startLoginStatusWatcher();
+});
