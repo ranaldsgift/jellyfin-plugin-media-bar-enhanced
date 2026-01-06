@@ -11,7 +11,7 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.MediaBarEnhanced
 {
     /// <summary>
-    /// The main plugin.
+    /// The main plugin. 
     /// </summary>
     public class MediaBarEnhancedPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
     {
