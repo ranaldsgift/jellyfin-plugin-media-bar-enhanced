@@ -13,8 +13,8 @@
         "changelog": "Initial release",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/CodeDevMLH/jellyfin-plugin-media-bar-enhanced/releases/download/v1.0.0.0/Jellyfin.Plugin.MediaBarEnhanced.zip",
-        "checksum": "60e6c66ddb0b99aed887d1a2dc20a1bf",
-        "timestamp": "2026-01-06T23:41:14Z"
+        "checksum": "802711192ea72573e494d5b81948a550",
+        "timestamp": "2026-01-06T23:52:33Z"
       }
     ]
   }
