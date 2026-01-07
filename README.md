@@ -2,7 +2,7 @@
 
 Media Bar Enhanced is a plugin for Jellyfin that introduces a customizable and interactive media bar to your dashboard view on Jellyfin web.
 
-This plugin is a fork and enhancement of the original [Media Bar by MakD](https://github.com/MakD/Jellyfin-Media-Bar) media bar, but can be installed as plugin for easier installation and management/configuration.
+This plugin is a fork and enhancement of the original [Media Bar by MakD](https://github.com/MakD/Jellyfin-Media-Bar), but can be installed as plugin for easier installation and management/configuration.
 
 ![logo](https://raw.githubusercontent.com/CodeDevMLH/jellyfin-plugin-media-bar-enhanced/main/logo.png)
 
@@ -11,6 +11,7 @@ This plugin is a fork and enhancement of the original [Media Bar by MakD](https:
 ## Table of Contents
 - [Jellyfin Media Bar Enhanced Plugin](#jellyfin-media-bar-enhanced-plugin)
   - [Table of Contents](#table-of-contents)
+  - [Overview](#overview)
   - [Features](#features)
     - [New Features \& Enhancements](#new-features--enhancements)
     - [Core Features](#core-features)
@@ -27,6 +28,45 @@ This plugin is a fork and enhancement of the original [Media Bar by MakD](https:
   - [Contributing](#contributing)
 
 ---
+
+## Overview
+![demo](https://github.com/user-attachments/assets/3a01b886-1a96-4dd1-abf6-e9c3b054bfde)
+
+Expand to get more impressions:
+
+<details>
+<summary>Desktop Layout</summary> 
+
+<img width="1920" height="1080" alt="trailer button" src="https://github.com/user-attachments/assets/5dce8eb1-8f2f-4583-a6d5-16f27ced8608" />
+Normal mode like the original with additional trailer button
+<br><br><br>
+
+<img width="1920" height="993" alt="modal_desktop" src="https://github.com/user-attachments/assets/9087f43d-cd9d-4581-a7e0-404b75bc8e02" />
+Trailer modal
+<br><br><br>
+
+<img width="1920" height="994" alt="config" src="https://github.com/user-attachments/assets/5492c384-a5c4-47ee-9428-3d9de2748e63" />
+Excerpt from the config: E.g. here you can simply add your items that should be displayed
+<br><br>
+</details>
+
+
+<details>
+<summary>Mobile Layout</summary> 
+
+![demo_mobile](https://github.com/user-attachments/assets/d11a7ed0-ceb7-43c3-9b22-09510251e0aa)
+<br>If trailer on mobile is eenabled...
+<br><br><br>
+
+<img width="1080" height="2199" alt="mobile" src="https://github.com/user-attachments/assets/f0a0cc0d-f019-45f5-96c8-a5de14bf92ba" />
+Normal mode like the original with additional trailer button
+<br><br><br>
+
+<img width="1080" height="2199" alt="trailer_modal_mobile" src="https://github.com/user-attachments/assets/944f9b82-9c9b-411f-883b-877b65ed933f" />
+Trailer modal
+<br><br><
+</details>
+
 
 ## Features
 
