@@ -63,8 +63,8 @@ Normal mode like the original with additional trailer button
 <br><br><br>
 
 <img width="1080" height="2199" alt="trailer_modal_mobile" src="https://github.com/user-attachments/assets/944f9b82-9c9b-411f-883b-877b65ed933f" />
-Trailer modal
-<br><br><
+Trailer modal in portrait mode
+<br><br>
 </details>
 
 
