@@ -1259,6 +1259,7 @@ const VisibilityObserver = {
     if (isVisible) {
       if (STATE.slideshow.slideInterval && !STATE.slideshow.isPaused) {
         STATE.slideshow.slideInterval.start();
+        SlideshowManager.resumeActivePlayback();
       }
     } else {
       if (STATE.slideshow.slideInterval) {
@@ -2346,6 +2347,34 @@ const SlideshowManager = {
           console.warn("Error pausing HTML5 video:", e);
         }
       });
+    }
+  },
+
+  /**
+   * Resumes playback for the active slide if not globally paused
+   */
+  resumeActivePlayback() {
+    if (STATE.slideshow.isPaused) return;
+
+    const currentItemId = STATE.slideshow.itemIds[STATE.slideshow.currentSlideIndex];
+    if (!currentItemId) return;
+
+    const currentSlide = document.querySelector(`.slide[data-item-id="${currentItemId}"]`);
+    if (!currentSlide) return;
+
+    // 1. Try YouTube Player
+    const ytPlayer = STATE.slideshow.videoPlayers[currentItemId];
+    if (ytPlayer && typeof ytPlayer.playVideo === 'function') {
+      ytPlayer.playVideo();
+    }
+
+    // 2. Try HTML5 Video
+    const html5Video = currentSlide.querySelector('video');
+    if (html5Video) {
+      if (STATE.slideshow.isMuted) {
+        html5Video.muted = true;
+      }
+      html5Video.play().catch(e => console.warn("Error resuming HTML5 video:", e));
     }
   },
 
