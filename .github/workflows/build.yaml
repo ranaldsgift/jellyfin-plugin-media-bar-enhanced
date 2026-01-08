@@ -13,9 +13,6 @@ on:
       - '.editorconfig'
       - 'LICENSE'
       - 'logo.png'
-  pull_request:
-    paths-ignore:
-      - '**/*.md'
   workflow_dispatch:
 
 jobs:
