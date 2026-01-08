@@ -30,7 +30,7 @@ namespace Jellyfin.Plugin.MediaBarEnhanced.Configuration
         public bool EnableKeyboardControls { get; set; } = true;
         public bool AlwaysShowArrows { get; set; } = false;
         public string CustomMediaIds { get; set; } = "";
-        public bool EnableCustomMediaIds { get; set; } = false;
+        public bool EnableCustomMediaIds { get; set; } = true;
         public bool EnableSeasonalContent { get; set; } = false;
         public bool IsEnabled { get; set; } = true;
     }
