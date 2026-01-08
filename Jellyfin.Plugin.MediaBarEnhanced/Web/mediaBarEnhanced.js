@@ -44,7 +44,7 @@ const CONFIG = {
   showTrailerButton: true,
   enableKeyboardControls: true,
   alwaysShowArrows: false,
-  enableCustomMediaIds: false,
+  enableCustomMediaIds: true,
   enableSeasonalContent: false,
   customMediaIds: "",
   enableLoadingScreen: true,
@@ -2514,17 +2514,23 @@ const SlideshowManager = {
       try {
         let id = rawId;
 
-        // If not a valid GUID, treat as a name and search
+        // If not a valid GUID, check if it starts with one (comments) or treat as a name
         if (!guidRegex.test(rawId)) {
-          console.log(`Input '${rawId}' is not a GUID, searching for Collection/Playlist by name...`);
-          const resolvedId = await ApiUtils.findCollectionOrPlaylistByName(rawId);
+          const guidMatch = rawId.match(/^([0-9a-f]{32})(?:[^0-9a-f]|$)/i);
 
-          if (resolvedId) {
-            console.log(`Resolved name '${rawId}' to ID: ${resolvedId}`);
-            id = resolvedId;
+          if (guidMatch) {
+            id = guidMatch[1];
           } else {
-            console.warn(`Could not find Collection or Playlist with name: '${rawId}'`);
-            continue; // Skip if resolution failed
+            console.log(`Input '${rawId}' is not a GUID, searching for Collection/Playlist by name...`);
+            const resolvedId = await ApiUtils.findCollectionOrPlaylistByName(rawId);
+
+            if (resolvedId) {
+              console.log(`Resolved name '${rawId}' to ID: ${resolvedId}`);
+              id = resolvedId;
+            } else {
+              console.warn(`Could not find Collection or Playlist with name: '${rawId}'`);
+              continue; // Skip if resolution failed
+            }
           }
         }
 
