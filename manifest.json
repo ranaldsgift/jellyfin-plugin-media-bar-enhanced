@@ -2,7 +2,7 @@
   {
     "guid": "d7e11d57-819b-4bdd-a88d-53c5f5560225",
     "name": "Media Bar Enhanced",
-    "description": "A feature-rich fork of the original Media Bar script by MakD that brings your home screen to life.\n\n-> 100% Configurable via Web UI: Manage all features, lists, and settings effortlessly through the plugin configuration page.\n\nKey Highlights:\n- Cinematic Video Backdrops: Supports local & YouTube trailers (incl. SponsorBlock)\n- Custom Content: Curate your slideshow with specific Collections, Playlists, or seasonal events\n\nAdditional Features:\n- Full-width immersive mode\n- Smart resolution handling (up to 4K)\n- Full keyboard navigation & playback control\n- Wait-for-trailer options\n- Customizable pagination & animations",
+    "description": "A feature-rich fork of the original Media Bar script by MakD that brings your home screen to life.\n\n-> 100% Configurable via Web UI: Manage all features, lists, and settings effortlessly through the plugin configuration page.\n\nKey Highlights:\n- Cinematic Video Backdrops: Supports local & YouTube trailers (incl. SponsorBlock)\n- Custom Content: Curate your slideshow with specific Collections, Playlists, or seasonal events\n\nAdditional Features:\n- Full-width immersive mode\n- Smart resolution handling (up to 4K)\n- Full keyboard navigation & playback control\n- Wait-for-trailer options\n- Customizable pagination & animations\n\nIf you do not have write permissions to the web folder, please also install the file-transformation plugin.",
     "overview": "Transforms your Jellyfin home screen with an immersive, fully configurable media slideshow featuring video backdrops.",
     "owner": "CodeDevMLH",
     "category": "General",
