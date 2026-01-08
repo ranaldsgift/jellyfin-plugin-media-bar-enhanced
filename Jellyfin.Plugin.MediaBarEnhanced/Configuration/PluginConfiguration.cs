@@ -31,6 +31,7 @@ namespace Jellyfin.Plugin.MediaBarEnhanced.Configuration
         public bool AlwaysShowArrows { get; set; } = false;
         public string CustomMediaIds { get; set; } = "";
         public bool EnableCustomMediaIds { get; set; } = true;
+        public string PreferredVideoQuality { get; set; } = "Auto";
         public bool EnableSeasonalContent { get; set; } = false;
         public bool IsEnabled { get; set; } = true;
     }

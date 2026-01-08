@@ -42,6 +42,7 @@ const CONFIG = {
   fullWidthVideo: true,
   enableMobileVideo: false,
   showTrailerButton: true,
+  preferredVideoQuality: "Auto",
   enableKeyboardControls: true,
   alwaysShowArrows: false,
   enableCustomMediaIds: true,
@@ -1417,6 +1418,21 @@ const SlideCreator = {
               loop: 0
             };
 
+            // Determine video quality
+            let quality = 'hd1080';
+            if (CONFIG.preferredVideoQuality === 'Maximum') {
+              quality = 'highres';
+            } else if (CONFIG.preferredVideoQuality === '720p') {
+              quality = 'hd720';
+            } else if (CONFIG.preferredVideoQuality === '1080p') {
+              quality = 'hd1080';
+            } else { // Auto or fallback
+              // If screen is wider than 1920, prefer highres, otherwise 1080p
+              quality = window.screen.width > 1920 ? 'highres' : 'hd1080';
+            }
+
+            playerVars.suggestedQuality = quality;
+
             // Apply SponsorBlock start/end times
             if (segments.intro) {
               playerVars.start = Math.ceil(segments.intro[1]);
@@ -1444,6 +1460,10 @@ const SlideCreator = {
                   } else {
                     event.target.unMute();
                     event.target.setVolume(40);
+                  }
+
+                  if (typeof event.target.setPlaybackQuality === 'function') {
+                    event.target.setPlaybackQuality(quality);
                   }
 
                   // Only play if this is the active slide
@@ -1494,6 +1514,7 @@ const SlideCreator = {
           className: "backdrop video-backdrop",
           src: trailerUrl,
           autoplay: false,
+          preload: "auto",
           loop: false,
           style: "object-fit: cover; width: 100%; height: 100%; pointer-events: none;"
         };
