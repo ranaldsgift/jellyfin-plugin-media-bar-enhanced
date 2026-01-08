@@ -255,7 +255,7 @@ jobs:
           # Check if there are changes
           if [[ -n $(git status -s) ]]; then
             git add manifest.json
-            git commit -m "Auto-Update MediaBar Enhanced to v${{ env.VERSION }}"
+            git commit -m "Auto-Update MediaBar Enhanced to v${{ env.VERSION }} [skip ci]"
             git push
           else
             echo "No changes to seasonal manifest."
