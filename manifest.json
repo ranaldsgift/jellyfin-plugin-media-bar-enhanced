@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/CodeDevMLH/jellyfin-plugin-media-bar-enhanced/refs/heads/main/logo.png",
     "versions": [
       {
+        "version": "1.2.0.0",
+        "changelog": "- Add Youtube video quality preference setting (Auto / 1080p / Highres)\n- Set preferred video quality on YouTube player based on setting",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "",
+        "checksum": "",
+        "timestamp": ""
+      },
+      {
         "version": "1.1.2.0",
         "changelog": "- Add method to resume video playback when slideshow is active",
         "targetAbi": "10.11.0.0",

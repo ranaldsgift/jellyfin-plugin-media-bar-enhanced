@@ -156,6 +156,18 @@
                             </label>
                             <div class="fieldDescription">Skip intro/outro segments in YouTube trailers.</div>
                         </div>
+                        <div class="selectContainer">
+                            <label class="selectLabel" for="PreferredVideoQuality">Preferred YouTube Quality</label>
+                            <select is="emby-select" id="PreferredVideoQuality" name="PreferredVideoQuality"
+                                class="emby-select-withcolor emby-select">
+                                <option value="Auto">Auto (Smart)</option>
+                                <option value="Maximum">Maximum (4K+)</option>
+                                <option value="1080p">1080p</option>
+                                <option value="720p">720p</option>
+                            </select>
+                            <div class="fieldDescription">"Auto" selects Maximum if screen width > 1920px, otherwise
+                                1080p.</div>
+                        </div>
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label>
                                 <input is="emby-checkbox" type="checkbox" id="StartMuted" name="StartMuted" />
