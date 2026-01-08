@@ -1264,6 +1264,7 @@ const VisibilityObserver = {
       if (STATE.slideshow.slideInterval) {
         STATE.slideshow.slideInterval.stop();
       }
+      SlideshowManager.stopAllPlayback();
     }
   },
 
@@ -2314,6 +2315,37 @@ const SlideshowManager = {
       const pauseLabel = LocalizationUtils.getLocalizedString('ButtonPause', 'Pause');
       pauseButton.setAttribute("aria-label", pauseLabel);
       pauseButton.setAttribute("title", pauseLabel);
+    }
+  },
+
+  /**
+   * Stops all video playback (YouTube and HTML5)
+   * Used when navigating away from the home screen
+   */
+  stopAllPlayback() {
+    // 1. Pause all YouTube players
+    if (STATE.slideshow.videoPlayers) {
+      Object.values(STATE.slideshow.videoPlayers).forEach(player => {
+        try {
+          if (player && typeof player.pauseVideo === 'function') {
+            player.pauseVideo();
+          }
+        } catch (e) {
+          console.warn("Error pausing YouTube player:", e);
+        }
+      });
+    }
+
+    // 2. Pause all HTML5 videos
+    const container = document.getElementById("slides-container");
+    if (container) {
+      container.querySelectorAll('video').forEach(video => {
+        try {
+          video.pause();
+        } catch (e) {
+          console.warn("Error pausing HTML5 video:", e);
+        }
+      });
     }
   },
 
