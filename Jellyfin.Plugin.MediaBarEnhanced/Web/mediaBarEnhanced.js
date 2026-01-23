@@ -1,5 +1,5 @@
 /*
- * Jellyfin Slideshow by M0RPH3US v3.0.6
+ * Jellyfin Slideshow by M0RPH3US v3.0.8
  * Modified by CodeDevMLH v1.1.0.0
  * 
  * New features:
@@ -253,31 +253,53 @@ const initLoadingScreen = () => {
 
   const checkInterval = setInterval(() => {
     const loginFormLoaded = document.querySelector(".manualLoginForm");
-    const homePageLoaded =
-      document.querySelector(".homeSectionsContainer") &&
-      document.querySelector("#slides-container");
+    const activeTab = document.querySelector(".pageTabContent.is-active");
 
-    if (loginFormLoaded || homePageLoaded) {
-      clearInterval(progressInterval);
-      clearInterval(checkInterval);
+    if (loginFormLoaded) {
+      finishLoading();
+      return;
+    }
 
-      progressBar.style.transition = "width 300ms ease-in-out";
-      progressBar.style.width = "100%";
-      unfilledBar.style.width = "0%";
+    if (activeTab) {
+      const tabIndex = activeTab.getAttribute("data-index");
 
-      progressBar.addEventListener('transitionend', () => {
-        requestAnimationFrame(() => {
-          const loader = document.querySelector(".bar-loading");
-          if (loader) {
-            loader.style.opacity = '0';
-            setTimeout(() => {
-              loader.remove();
-            }, 300);
-          }
-        });
-      })
+      if (tabIndex === "0") {
+        const homeSections = document.querySelector(".homeSectionsContainer");
+        const slidesContainer = document.querySelector("#slides-container");
+
+        if (homeSections && slidesContainer) {
+          finishLoading();
+        }
+      } else {
+        if (
+          activeTab.children.length > 0 ||
+          activeTab.innerText.trim().length > 0
+        ) {
+          finishLoading();
+        }
+      }
     }
   }, CONFIG.loadingCheckInterval);
+
+  const finishLoading = () => {
+    clearInterval(progressInterval);
+    clearInterval(checkInterval);
+    progressBar.style.transition = "width 300ms ease-in-out";
+    progressBar.style.width = "100%";
+    unfilledBar.style.width = "0%";
+
+    progressBar.addEventListener("transitionend", () => {
+      requestAnimationFrame(() => {
+        const loader = document.querySelector(".bar-loading");
+        if (loader) {
+          loader.style.opacity = "0";
+          setTimeout(() => {
+            loader.remove();
+          }, 300);
+        }
+      });
+    });
+  };
 };
 
 /**
