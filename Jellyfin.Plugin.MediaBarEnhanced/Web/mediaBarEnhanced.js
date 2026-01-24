@@ -1275,9 +1275,12 @@ const VisibilityObserver = {
     const isVisible =
       (window.location.hash === "#/home.html" ||
         window.location.hash === "#/home") &&
+      activeTab &&
       activeTab.getAttribute("data-index") === "0";
 
     container.style.display = isVisible ? "block" : "none";
+    container.style.visibility = isVisible ? "visible" : "hidden";
+    container.style.pointerEvents = isVisible ? "auto" : "none";
 
     if (isVisible) {
       if (STATE.slideshow.slideInterval && !STATE.slideshow.isPaused) {
@@ -1296,11 +1299,11 @@ const VisibilityObserver = {
    * Initializes visibility observer
    */
   init() {
-    const observer = new MutationObserver(this.updateVisibility);
+    const observer = new MutationObserver(() => this.updateVisibility());
     observer.observe(document.body, { childList: true, subtree: true });
 
-    document.body.addEventListener("click", this.updateVisibility);
-    window.addEventListener("hashchange", this.updateVisibility);
+    document.body.addEventListener("click", () => this.updateVisibility());
+    window.addEventListener("hashchange", () => this.updateVisibility());
 
     this.updateVisibility();
   },
