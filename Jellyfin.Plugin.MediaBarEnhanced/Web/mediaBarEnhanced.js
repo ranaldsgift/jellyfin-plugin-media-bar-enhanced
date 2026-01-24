@@ -1266,7 +1266,7 @@ class SlideTimer {
  * Observer for handling slideshow visibility based on current page
  */
 const VisibilityObserver = {
-  updateVisibility: function() {
+  updateVisibility() {
     const activeTab = document.querySelector(".emby-tab-button-active");
     const container = document.getElementById("slides-container");
 
