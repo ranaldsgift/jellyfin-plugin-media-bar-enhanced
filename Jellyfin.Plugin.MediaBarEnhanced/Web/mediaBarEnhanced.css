@@ -170,6 +170,12 @@
   height: 90%;
   overflow: hidden;
   margin: 0 auto;
+  pointer-events: auto;
+}
+
+#slides-container[style*="display: none"],
+#slides-container[style*="visibility: hidden"] {
+  pointer-events: none !important;
 }
 
 .arrow {
