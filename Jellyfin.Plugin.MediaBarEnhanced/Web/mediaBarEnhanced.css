@@ -790,6 +790,41 @@
     left: 50%;
     transform: translate(-50%, -50%);
   }
+
+  @media (max-width: 400px) {
+    .button-container {
+      gap: 10px;
+    }
+
+    .play-button,
+    .trailer-button {
+      padding: 8px 14px;
+    }
+
+    .misc-info {
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0px 10px;
+    }
+
+    .runTime {
+      width: 100%;
+      justify-content: center;
+      margin-top: 0.5vh;
+    }
+
+    .misc-info .separator-icon:last-of-type {
+      display: none;
+    }
+
+    .genre {
+      top: calc(50% + 16vh);
+    }
+
+    .button-container {
+      top: calc(50% + 27vh);
+    }
+  }
 }
 
 /*Landscape Mode Phones*/
