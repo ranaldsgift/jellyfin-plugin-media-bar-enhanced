@@ -78,6 +78,7 @@ const STATE = {
     videoPlayers: {},
     sponsorBlockInterval: null,
     isMuted: CONFIG.startMuted,
+    customTrailerUrls: {},
   },
 };
 
@@ -344,6 +345,7 @@ const resetSlideshowState = () => {
   STATE.slideshow.itemIds = [];
   STATE.slideshow.loadedItems = {};
   STATE.slideshow.createdSlides = {};
+  STATE.slideshow.customTrailerUrls = {};
   STATE.slideshow.totalItems = 0;
   STATE.slideshow.isLoading = false;
 };
@@ -1429,7 +1431,11 @@ const SlideCreator = {
     let trailerUrl = null;
 
     // 1. Check for Remote Trailers (YouTube)
-    if (item.RemoteTrailers && item.RemoteTrailers.length > 0) {
+    // Priority: Custom Config URL > Metadata RemoteTrailer
+    if (STATE.slideshow.customTrailerUrls && STATE.slideshow.customTrailerUrls[itemId]) {
+      trailerUrl = STATE.slideshow.customTrailerUrls[itemId];
+      console.log(`Using custom trailer URL for ${itemId}: ${trailerUrl}`);
+    } else if (item.RemoteTrailers && item.RemoteTrailers.length > 0) {
       trailerUrl = item.RemoteTrailers[0].Url;
     }
 
@@ -2575,10 +2581,25 @@ const SlideshowManager = {
    */
   parseCustomIds() {
     if (!CONFIG.enableSeasonalContent) {
-      return CONFIG.customMediaIds
-        .split(/[\n,]/)         // Split by comma or newline
-        .map((id) => id.trim()) // Remove whitespace
-        .filter((id) => id);    // Remove empty strings
+    return CONFIG.customMediaIds
+      .split(/[\n,]/).map((line) => {
+        const urlMatch = line.match(/\[(.*?)\]/);
+        let id = line;
+        if (urlMatch) {
+            const url = urlMatch[1];
+            id = line.replace(/\[.*?\]/, '').trim();
+            const guidMatch = id.match(/([0-9a-f]{32})/i);
+            if (guidMatch) {
+                id = guidMatch[1];
+            } else {
+                id = id.split('|')[0].trim();
+            }
+            STATE.slideshow.customTrailerUrls[id] = url;
+        }
+        return id.trim();
+      }) 
+      .map((id) => id.trim())
+      .filter((id) => id);
     } else {
       return this.parseSeasonalIds();
     }
@@ -2635,7 +2656,22 @@ const SlideshowManager = {
 
         if (isInRange) {
           console.log(`Seasonal match found: ${line}`);
-          const ids = idsPart.split(/[,]/).map(id => id.trim()).filter(id => id);
+          const ids = idsPart.split(/[,]/).map(line => {
+              const urlMatch = line.match(/\[(.*?)\]/);
+              let id = line;
+              if (urlMatch) {
+                  const url = urlMatch[1];
+                  id = line.replace(/\[.*?\]/, '').trim();
+                  const guidMatch = id.match(/([0-9a-f]{32})/i);
+                  if (guidMatch) {
+                       id = guidMatch[1];
+                  } else {
+                       id = id.split('|')[0].trim();
+                  }
+                  STATE.slideshow.customTrailerUrls[id] = url;
+              }
+              return id.trim();
+          }).filter(id => id);
           rawIds.push(...ids);
         }
       }
