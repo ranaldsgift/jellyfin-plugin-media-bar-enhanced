@@ -88,7 +88,7 @@ This plugin builds upon the original Media Bar with new capabilities and improve
     *   Pagination dots turn into a counter (e.g., 1/20) if the limit is exceeded
         <details>
         <summary>Have a look:</summary>
-        
+        <img width="167" height="142" alt="PagDots_Number" src="https://github.com/user-attachments/assets/6a0a5040-cf13-4d9c-ae96-f50ec249c3f1" />
         </details>
     *   Option to disable the loading screen
 
