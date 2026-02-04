@@ -82,6 +82,7 @@ This plugin builds upon the original Media Bar with new capabilities and improve
 *   **Smarter Playback**:
     *   Option to wait for the trailer to end before advancing the slide.
     *   Mute/Unmute controls
+*   **Override Trailers**: Manually specify a custom trailer URL for any item via the Custom Media IDs list
 *   **Customization**:
     *   **Custom Media IDs**: Manually specify which items (Movies, Series, Collections/Boxsets) to display. Easily configurable via the plugin settings
     *   **Seasonal Content Mode**: Define date-based lists for holidays and seasons (e.g., Halloween, Christmas)
@@ -154,6 +155,9 @@ Configure the plugin via **Dashboard** > **Plugins** > **Media Bar Enhanced**.
 Define exactly what shows up in your bar.
 
 *   **Enable Custom Media IDs**: Restrict the slideshow to a specific list of IDs.
+    *   **Manual Trailer Override**: Add `[YouTube_URL]` after an ID to force a specific trailer.
+    *   Example ID: `a1b2c3d4e5... [https://www.youtube.com/watch?v=VIDEO_ID]`
+    *   Example Collection Name: `Halloween Collection [https://...] | My Description` (Note: Use `|` to separate description from name if using a name instead of an ID)
 *   **Enable Seasonal Content Mode**: Advanced date-based scheduling.
     *   Format: `DD.MM-DD.MM | Name | ID1, ID2, ID3`
     *   Example: `20.10-31.10 | Halloween | <ID_OF_HALLOWEEN_COLLECTION>`
