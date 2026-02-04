@@ -94,7 +94,7 @@ This plugin builds upon the original Media Bar with new capabilities and improve
     *   Client Settings: Optionally allow users to set selected media bar settings from their client.
         <details>
         <summary>Have a look:</summary>
-        
+        <img width="513" height="575" alt="Client-Settings" src="https://github.com/user-attachments/assets/3e29a84f-f8ea-4b7b-b561-80493cb1535b" />
         </details>
 
 ### Core Features
