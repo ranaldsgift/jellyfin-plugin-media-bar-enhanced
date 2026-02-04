@@ -16,7 +16,7 @@
                     <a is="emby-linkbutton" class="raised raised-mini emby-button" style="margin-left: 2em;"
                         target="_blank" href="https://github.com/CodeDevMLH/jellyfin-plugin-media-bar-enhanced">
                         <i class="md-icon button-icon button-icon-left secondaryText"></i>
-                        <span>Help</span>
+                        <span>${Help}</span>
                     </a>
                 </div>
                 <hr style="max-width: 800px; margin: 1em 0;">
@@ -109,20 +109,27 @@
                         <div class="inputContainer">
                             <label class="inputLabel inputLabelUnfocused" for="CustomMediaIds">Media/Collection/Playlist
                                 IDs
-                                (Comma or Newline separated)</label>
+                                (Newline or Comma separated)</label>
                             <textarea is="emby-textarea" id="CustomMediaIds" name="CustomMediaIds"
                                 style="width: 100%; height: 150px; font-family: monospace;"></textarea>
-                            <div class="fieldDescription" id="customMediaIdsDesc">Enter the IDs of the items you want to
-                                show in the slideshow.
-                                You can separate them by comma or new line.
+                            <div class="fieldDescription" id="customMediaIdsDesc">Enter the IDs of the items you want to show in the slideshow.
+                                You can separate them by new line or comma.
+                                <br><br>
+                                <b>Manual Trailer Override:</b> You can specify a YouTube URL for an item by adding it in
+                                brackets: <br> <code>e.g. ID DESCRIPTION [https://youtu.be/...]</code> or <code>ID [https://youtu.be/...] DESCRIPTION</code>
+                                <br><br>
                                 You can also add a description after the ID using any separator like space, pipe
-                                (|) or dash (-) (e.g. <code>ID | Description</code>).
-                                Note: The separator MUST NOT be a hex character (0-9, a-f).</div>
+                                (|) or dash (-): <br>e.g. <code>ID DESCRIPTION</code> or <code>ID | DESCRIPTION</code>
+                                <br><br>
+                                <b>Note:</b> If using a <b>Collection Name</b> (instead of an ID) combined with a description, you <b>MUST</b> use 
+                                the pipe (|) separator.
+                                <br>
+                                <b>Note:</b> The separator <b>MUST NOT</b> be a hex character (0-9, a-f).</div>
                             <div class="fieldDescription" id="seasonalMediaIdsDesc" style="display: none;">
                                 <b>Seasonal Mode Enabled:</b> Define lines with date ranges (Format: DD.MM-DD.MM |
                                 <i>name</i> | <i>IDs</i>).<br>
                                 Example:<br>
-                                <code>20.10-31.10 | Halloween | ID1, ID2</code><br>
+                                <code>20.10-31.10 | Halloween | ID1, ID2 [https://youtu.be/...]</code><br>
                                 <code>01.12-26.12 | Christmas | ID3, ID4</code><br>
                                 <i>Only lines matching the current date will be used. If no line matches, it will try to
                                     fetch the list.txt or use random items.</i>
@@ -131,7 +138,7 @@
                                 Example:
                                 <code>https://your-jellyfin-url/web/#/details?id=<b style="color:red;">your-item-id</b>&serverId=your-server-id</code><br><br>
                                 You can also insert a name of a collection or playlist to fetch the IDs of all items in
-                                it (will take the first hit.<br>Note: there is currently no feedback if the name
+                                it (will take the first hit.<br><b>Note:</b> there is currently no feedback if the name
                                 resolution succeeded, you will have to look if the bar displays the correct items.).
                             </p>
                         </div>

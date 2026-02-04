@@ -86,6 +86,10 @@ This plugin builds upon the original Media Bar with new capabilities and improve
     *   **Custom Media IDs**: Manually specify which items (Movies, Series, Collections/Boxsets) to display. Easily configurable via the plugin settings
     *   **Seasonal Content Mode**: Define date-based lists for holidays and seasons (e.g., Halloween, Christmas)
     *   Pagination dots turn into a counter (e.g., 1/20) if the limit is exceeded
+        <details>
+        <summary>Have a look:</summary>
+        
+        </details>
     *   Option to disable the loading screen
 
 ### Core Features
@@ -118,13 +122,14 @@ Because this plugin relies on injecting JavaScript and CSS into the web interfac
 
 | Client Platform | Status | Notes |
 | :--- | :---: | :--- |
-| **Web Browsers** (Chrome, Firefox, Edge, etc.) | ✅ | Fully supported. |
-| **Jellyfin Media Player** (Windows/Linux/macOS) | ✅ | Fully supported. |
-| **Android App** | ✅ | Works (Web wrapper). |
-| **iOS App** | ✅ | Works (Web wrapper). |
-| **Android TV / Fire TV** | ❌ | **Not supported** (Native UI). |
-| **Roku** | ❌ | **Not supported** (Native UI). |
-| **Swiftfin** | ❌ | **Not supported** (Native UI). |
+| **Web Browsers** (Firefox, Chrome etc.) | ✅ | Direct JS injection |
+| **Jellyfin Media Player** (Windows/Linux/macOS) | ✅ | Uses jellyfin web |
+| **Android App** | ✅ | Uses a web wrapper |
+| **iOS App** | ✅ | Uses a web wrapper |
+| **Android TV / Fire TV** | ❌ | **Not supported.** Uses a native Java/Kotlin UI. |
+| **Roku** | ❌ | **Not supported.** Uses a native UI. |
+| **Swiftfin** (iOS/tvOS) | ❌ | **Not supported.** Uses a native Swift UI. |
+| **Kodi** (via Jellyfin Addon) | ❌ | **Not supported.** Uses Kodi's native skinning engine. |
 
 ## Configuration
 
