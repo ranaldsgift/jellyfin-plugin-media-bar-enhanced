@@ -52,9 +52,9 @@
                             <label>
                                 <input is="emby-checkbox" type="checkbox" id="EnableVideoBackdrop"
                                     name="EnableVideoBackdrop" />
-                                <span>Enable Video Backdrops</span>
+                                <span>Enable Trailer Backdrops</span>
                             </label>
-                            <div class="fieldDescription">Show video trailers as background if available.<br>Adds a
+                            <div class="fieldDescription">Show trailers as background if available.<br>Adds a
                                 mute/unmute and pause/play button to control the video in the right top corner.</div>
                         </div>
                         <div class="checkboxContainer checkboxContainer-withDescription">
@@ -69,7 +69,7 @@
                             <label>
                                 <input is="emby-checkbox" type="checkbox" id="EnableMobileVideo"
                                     name="EnableMobileVideo" />
-                                <span>Enable Mobile Video</span>
+                                <span>Enable Trailer On Mobile</span>
                             </label>
                             <div class="fieldDescription">Allow video playback on mobile devices.</div>
                         </div>
@@ -80,7 +80,7 @@
                                 <span>Show Trailer Button</span>
                             </label>
                             <div class="fieldDescription">Display a button to open trailer in modal. Only visible if
-                                trailer is not set as backdrop.</div>
+                                trailer is not set as backdrop or if no trailer is available.</div>
                         </div>
                     </div>
 
@@ -153,8 +153,17 @@
                                     name="SlideAnimationEnabled" />
                                 <span>Enable Slide Animations</span>
                             </label>
-                            <div class="fieldDescription">Enable the zooming-in effect when a new slide is
-                                shown. Attention: This may cause performance issues on weaker client hardware.</div>
+                            <div class="fieldDescription">Enable the zooming-in effect on background images when a new slide is
+                                shown (does not affect trailer backdrops). Attention: This may cause performance issues on weaker client hardware.</div>
+                        </div>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label>
+                                <input is="emby-checkbox" type="checkbox" id="EnableClientSideSettings"
+                                    name="EnableClientSideSettings" />
+                                <span>Enable Client-Side Settings</span>
+                            </label>
+                            <div class="fieldDescription">If enabled, users will see a media bar icon in the header to
+                                override settings (like disabling the bar or trailer backdrops) locally on their device.</div>
                         </div>
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label>
@@ -361,7 +370,7 @@
                             'WaitForTrailerToEnd', 'StartMuted', 'FullWidthVideo', 'EnableMobileVideo',
                             'ShowTrailerButton', 'AlwaysShowArrows', 'EnableKeyboardControls',
                             'EnableCustomMediaIds', 'CustomMediaIds', 'EnableLoadingScreen',
-                            'EnableSeasonalContent'
+                            'EnableSeasonalContent', 'EnableClientSideSettings'
                         ];
 
                         keys.forEach(function (key) {
@@ -410,7 +419,7 @@
                         'WaitForTrailerToEnd', 'StartMuted', 'FullWidthVideo', 'EnableMobileVideo',
                         'ShowTrailerButton', 'AlwaysShowArrows', 'EnableKeyboardControls',
                         'EnableCustomMediaIds', 'CustomMediaIds', 'EnableLoadingScreen',
-                        'EnableSeasonalContent'
+                        'EnableSeasonalContent', 'EnableClientSideSettings'
                     ];
 
                     keys.forEach(function (key) {

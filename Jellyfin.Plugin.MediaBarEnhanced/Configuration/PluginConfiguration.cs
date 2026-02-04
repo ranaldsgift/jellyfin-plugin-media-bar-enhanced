@@ -34,5 +34,6 @@ namespace Jellyfin.Plugin.MediaBarEnhanced.Configuration
         public string PreferredVideoQuality { get; set; } = "Auto";
         public bool EnableSeasonalContent { get; set; } = false;
         public bool IsEnabled { get; set; } = true;
+        public bool EnableClientSideSettings { get; set; } = false;
     }
 }
