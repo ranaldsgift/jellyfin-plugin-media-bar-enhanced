@@ -70,6 +70,7 @@ namespace Jellyfin.Plugin.MediaBarEnhanced.Api
             if (path.EndsWith(".js", StringComparison.OrdinalIgnoreCase)) return "application/javascript";
             if (path.EndsWith(".css", StringComparison.OrdinalIgnoreCase)) return "text/css";
             if (path.EndsWith(".html", StringComparison.OrdinalIgnoreCase)) return "text/html";
+            if (path.EndsWith(".svg", StringComparison.OrdinalIgnoreCase)) return "image/svg+xml";
             return "application/octet-stream";
         }
     }

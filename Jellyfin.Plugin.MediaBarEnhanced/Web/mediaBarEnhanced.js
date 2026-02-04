@@ -13,6 +13,7 @@
  * - option to set a maximum for the pagination dots (will turn into a counter style if exceeded)
  * - option to disable loading screen
  * - option to put collection (boxsets) IDs into the slideshow to display their items
+ * - option to enable client-side settings (allow users to override settings locally on their device)
  */
 
 //Core Module Configuration
@@ -49,6 +50,7 @@ const CONFIG = {
   enableSeasonalContent: false,
   customMediaIds: "",
   enableLoadingScreen: true,
+  enableClientSideSettings: false,
 };
 
 // State management
@@ -207,7 +209,7 @@ const initLoadingScreen = () => {
   if (!isHomePage) return;
 
   // Check LocalStorage for cached preference to avoid flash
-  const cachedSetting = localStorage.getItem('mediaBarEnhanced_enableLoadingScreen');
+  const cachedSetting = localStorage.getItem('mediaBarEnhanced-enableLoadingScreen');
   if (cachedSetting === 'false') {
     return;
   }
@@ -441,7 +443,7 @@ const fetchPluginConfig = async () => {
         }
 
         // Sync to LocalStorage for next load
-        localStorage.setItem('mediaBarEnhanced_enableLoadingScreen', CONFIG.enableLoadingScreen);
+        localStorage.setItem('mediaBarEnhanced-enableLoadingScreen', CONFIG.enableLoadingScreen);
 
         console.log("✅ MediaBarEnhanced config loaded", CONFIG);
       }
@@ -1440,7 +1442,12 @@ const SlideCreator = {
     }
 
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    const shouldPlayVideo = CONFIG.enableVideoBackdrop && (!isMobile || CONFIG.enableMobileVideo);
+    
+    // Client Setting Overrides
+    const enableVideo = MediaBarEnhancedSettingsManager.getSetting('videoBackdrops', CONFIG.enableVideoBackdrop);
+    const enableMobileVideo = MediaBarEnhancedSettingsManager.getSetting('mobileVideo', CONFIG.enableMobileVideo);
+    
+    const shouldPlayVideo = enableVideo && (!isMobile || enableMobileVideo);
 
     if (trailerUrl && shouldPlayVideo) {
       let isYoutube = false;
@@ -2135,7 +2142,9 @@ const SlideshowManager = {
         }
       }
 
-      if (CONFIG.slideAnimationEnabled) {
+      const enableAnimations = MediaBarEnhancedSettingsManager.getSetting('slideAnimations', CONFIG.slideAnimationEnabled);
+
+      if (enableAnimations) {
         const backdrop = currentSlide.querySelector(".backdrop");
         if (backdrop && !backdrop.classList.contains("video-backdrop")) {
           backdrop.classList.add("animate");
@@ -2181,11 +2190,14 @@ const SlideshowManager = {
       setTimeout(() => {
         STATE.slideshow.isTransitioning = false;
 
-        if (previousVisibleSlide && CONFIG.slideAnimationEnabled) {
-          const prevBackdrop = previousVisibleSlide.querySelector(".backdrop");
-          const prevLogo = previousVisibleSlide.querySelector(".logo");
-          if (prevBackdrop) prevBackdrop.classList.remove("animate");
-          if (prevLogo) prevLogo.classList.remove("animate");
+        if (previousVisibleSlide) {
+          const enableAnimations = MediaBarEnhancedSettingsManager.getSetting('slideAnimations', CONFIG.slideAnimationEnabled);
+          if (enableAnimations) {
+            const prevBackdrop = previousVisibleSlide.querySelector(".backdrop");
+            const prevLogo = previousVisibleSlide.querySelector(".logo");
+            if (prevBackdrop) prevBackdrop.classList.remove("animate");
+            if (prevLogo) prevLogo.classList.remove("animate");
+          }
         }
       }, CONFIG.fadeTransitionDuration);
     }
@@ -2774,7 +2786,10 @@ const SlideshowManager = {
         this.nextSlide();
       }, CONFIG.shuffleInterval);
 
-      if (CONFIG.waitForTrailerToEnd && STATE.slideshow.slideInterval) {
+      // Check if we should wait for trailer
+      const waitForTrailer = MediaBarEnhancedSettingsManager.getSetting('waitForTrailer', CONFIG.waitForTrailerToEnd);
+
+      if (waitForTrailer && STATE.slideshow.slideInterval) {
         const activeSlide = document.querySelector('.slide.active');
         const hasActiveVideo = !!(activeSlide && activeSlide.querySelector('.video-backdrop'));
         if (hasActiveVideo) {
@@ -2919,6 +2934,181 @@ const initArrowNavigation = () => {
   );
 };
 
+const MediaBarEnhancedSettingsManager = {
+  initialized: false,
+  
+  init() {
+    if (this.initialized) return;
+    if (!CONFIG.enableClientSideSettings) return;
+
+    this.initialized = true;
+    this.injectSettingsIcon();
+    console.log("MediaBarEnhanced: Client-Side Settings Manager initialized.");
+  },
+
+  getSetting(key, defaultValue) {
+    if (!CONFIG.enableClientSideSettings) return defaultValue;
+    const value = localStorage.getItem(`mediaBarEnhanced-${key}`);
+    return value !== null ? value === 'true' : defaultValue;
+  },
+
+  setSetting(key, value) {
+    localStorage.setItem(`mediaBarEnhanced-${key}`, value);
+  },
+
+  createIcon() {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'paper-icon-button-light headerButton media-bar-settings-button';
+    button.title = 'Media Bar Settings';
+    // button.innerHTML = '<span class="material-icons">tune</span>';
+
+    // button.innerHTML = '<img src="/MediaBarEnhanced/Resources/assets/logo_SW.svg" style="width: 24px; height: 24px; vertical-align: middle;">';
+    // currently not optimal, as it's egg-shaped due to the svg format... but if it's square, it's very small...
+    // button.innerHTML = '<img src="/MediaBarEnhanced/Resources/assets/logo_SW.svg" draggable="false" style="width: 52px; height: 24px; vertical-align: middle; pointer-events: none;">';
+    // button.innerHTML = '<img src="/MediaBarEnhanced/Resources/assets/logo_SW_SHORT.svg" draggable="false" style="width: 41px; height: 24px; vertical-align: middle; pointer-events: none;">';
+    button.innerHTML = '<img src="/MediaBarEnhanced/Resources/assets/logo_SW_MINIMAL.svg" draggable="false" style="width: 24px; height: 24px; vertical-align: middle; pointer-events: none;">';
+    
+    button.style.verticalAlign = 'middle';
+
+    button.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.toggleSettingsPopup(button);
+    });
+
+    return button;
+  },
+
+  injectSettingsIcon() {
+      const observer = new MutationObserver((mutations, obs) => {
+          const headerRight = document.querySelector('.headerRight');
+          if (headerRight && !document.querySelector('.media-bar-settings-button')) {
+              const icon = this.createIcon();
+              headerRight.prepend(icon);
+          }
+      });
+
+      observer.observe(document.body, {
+          childList: true,
+          subtree: true
+      });
+  },
+
+  createPopup(anchorElement) {
+    const existing = document.querySelector('.media-bar-settings-popup');
+    if (existing) existing.remove();
+
+    const popup = document.createElement('div');
+    popup.className = 'media-bar-settings-popup dialog';
+
+    Object.assign(popup.style, {
+        position: 'fixed',
+        zIndex: '10000',
+        backgroundColor: '#202020',
+        padding: '1em',
+        borderRadius: '0.3em',
+        boxShadow: '0 0 20px rgba(0,0,0,0.5)',
+        minWidth: '250px',
+        color: '#fff',
+    });
+
+    const rect = anchorElement.getBoundingClientRect();
+    
+    let rightPos = window.innerWidth - rect.right;
+    if (window.innerWidth < 450 || (window.innerWidth - rightPos) < 260) {
+        popup.style.right = '1rem';
+        popup.style.left = 'auto';
+    } else {
+        popup.style.right = `${rightPos}px`;
+        popup.style.left = 'auto';
+    }
+
+    popup.style.top = `${rect.bottom + 10}px`;
+
+    const settings = [
+        { key: 'enabled', label: 'Enable Media Bar Enhanced', description: 'Toggle the entire media bar visibility.', default: true },
+        { key: 'videoBackdrops', label: 'Enable Trailer Backdrops', description: 'Play trailers as background videos.', default: CONFIG.enableVideoBackdrop },
+        { key: 'trailerButton', label: 'Show Trailer Button', description: 'Show button to play trailer in popup (only backdrops without trailer)', default: CONFIG.showTrailerButton },
+        { key: 'mobileVideo', label: 'Enable Trailer On Mobile', description: 'Allow trailer backdrops on mobile devices.', default: CONFIG.enableMobileVideo },
+        { key: 'waitForTrailer', label: 'Wait For Trailer To End', description: 'Wait for the trailer to finish before changing slides.', default: CONFIG.waitForTrailerToEnd },
+        { key: 'slideAnimations', label: 'Enable Animations', description: 'Enable zooming-in effect (only on background images)', default: CONFIG.slideAnimationEnabled },
+    ];
+
+    let html = '<h3 style="margin-top:0; margin-bottom:1em; border-bottom:1px solid #444; padding-bottom:0.5em;">Media Bar Settings</h3>';
+
+    settings.forEach(setting => {
+        const isChecked = this.getSetting(setting.key, setting.default);
+        html += `
+        <div class="checkboxContainer checkboxContainer-withDescription" style="margin-bottom: 0.5em;">
+            <label class="emby-checkbox-label">
+                <input id="mb-setting-${setting.key}" type="checkbox" is="emby-checkbox" class="emby-checkbox" ${isChecked ? 'checked' : ''} />
+                <span class="checkboxLabel">${setting.label}</span>
+            </label>
+            <div class="fieldDescription">${setting.description}</div>
+        </div>
+        `;
+    });
+
+    // Buttons Container
+    html += `
+    <div style="margin-top:1em; display:flex; justify-content:flex-end; align-items:center; gap:1.5em;">
+        <button is="emby-button" type="button" class="raised button-cancel emby-button" id="mb-settings-reset" title="Reset to Server Defaults">
+            <span>Load Server Defaults</span>
+        </button>
+        <button is="emby-button" type="button" class="raised button-submit emby-button" id="mb-settings-save">
+            <span>Save & Reload</span>
+        </button>
+    </div>
+    `;
+
+    popup.innerHTML = html;
+
+    // Add Listeners
+    settings.forEach(setting => {
+        const checkbox = popup.querySelector(`#mb-setting-${setting.key}`);
+        checkbox.addEventListener('change', (e) => {
+            this.setSetting(setting.key, e.target.checked);
+        });
+    });
+
+    // Reload Handler
+    popup.querySelector('#mb-settings-save').addEventListener('click', () => {
+        location.reload();
+    });
+
+    // Reset Handler
+    popup.querySelector('#mb-settings-reset').addEventListener('click', () => {
+        if (confirm("Reset all local Media Bar settings to server defaults?")) {
+            Object.keys(localStorage).forEach(key => {
+                if (key.startsWith('mediaBarEnhanced-')) {
+                    localStorage.removeItem(key);
+                }
+            });
+            location.reload();
+        }
+    });
+
+    const closeHandler = (e) => {
+        if (!popup.contains(e.target) && e.target !== anchorElement && !anchorElement.contains(e.target)) {
+            popup.remove();
+            document.removeEventListener('click', closeHandler);
+        }
+    };
+    setTimeout(() => document.addEventListener('click', closeHandler), 0);
+
+    document.body.appendChild(popup);
+  },
+
+  toggleSettingsPopup(anchorElement) {
+    const existing = document.querySelector('.media-bar-settings-popup');
+    if (existing) {
+        existing.remove();
+    } else {
+        this.createPopup(anchorElement);
+    }
+  }
+};
+
 /**
  * Initialize the slideshow
  */
@@ -2927,6 +3117,24 @@ const slidesInit = async () => {
     console.log("⚠️ Slideshow already initialized, skipping");
     return;
   }
+  
+  if (CONFIG.enableClientSideSettings) {
+      MediaBarEnhancedSettingsManager.init();
+      const isEnabled = MediaBarEnhancedSettingsManager.getSetting('enabled', true);
+      if (!isEnabled) {
+          console.log("MediaBarEnhanced: Disabled by client-side setting.");
+          const homeSections = document.querySelector('.homeSectionsContainer');
+          if (homeSections) {
+            homeSections.style.top = '0';
+            homeSections.style.marginTop = '0';
+          }
+          const container = document.getElementById('slides-container');
+          if (container) container.style.display = 'none';
+          
+          return;
+      }
+  }
+
   STATE.slideshow.hasInitialized = true;
 
   /**
@@ -3044,6 +3252,6 @@ window.mediaBarEnhanced = {
 
 initLoadingScreen();
 
-loadPluginConfig().then(() => {
+fetchPluginConfig().then(() => {
   startLoginStatusWatcher();
 });

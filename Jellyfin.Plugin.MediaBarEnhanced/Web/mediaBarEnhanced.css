@@ -13,6 +13,7 @@
  * - option to set a maximum for the pagination dots (will turn into a counter style if exceeded)
  * - option to disable loading screen
  * - option to put collection (boxsets) IDs into the slideshow to display their items
+ * - option to enable client-side settings (allow users to override settings locally on their device)
  */
 
 @import url(https://fonts.googleapis.com/css2?family=Archivo+Narrow:ital,wght@0,400..700;1,400..700&display=swap);
