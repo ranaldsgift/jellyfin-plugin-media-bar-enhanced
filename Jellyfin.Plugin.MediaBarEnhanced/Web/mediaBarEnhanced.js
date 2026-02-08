@@ -1,5 +1,5 @@
 /*
- * Jellyfin Slideshow by M0RPH3US v3.0.9
+ * Jellyfin Slideshow by M0RPH3US v4.0.1
  * Modified by CodeDevMLH v1.1.0.0
  * 
  * New features:
@@ -81,6 +81,7 @@ const STATE = {
     sponsorBlockInterval: null,
     isMuted: CONFIG.startMuted,
     customTrailerUrls: {},
+    ytPromise: null,
   },
 };
 
@@ -582,23 +583,25 @@ const SlideUtils = {
    * @returns {Promise<void>}
    */
   loadYouTubeIframeAPI() {
-    return new Promise((resolve) => {
+    if (STATE.slideshow.ytPromise) return STATE.slideshow.ytPromise;
+
+    STATE.slideshow.ytPromise = new Promise((resolve) => {
       if (window.YT && window.YT.Player) {
-        resolve();
+        resolve(window.YT);
         return;
       }
 
-      const tag = document.createElement('script');
-      tag.src = "https://www.youtube.com/iframe_api";
-      const firstScriptTag = document.getElementsByTagName('script')[0];
-      firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
-
-      const previousOnYouTubeIframeAPIReady = window.onYouTubeIframeAPIReady;
-      window.onYouTubeIframeAPIReady = () => {
-        if (previousOnYouTubeIframeAPIReady) previousOnYouTubeIframeAPIReady();
-        resolve();
-      };
+      window.onYouTubeIframeAPIReady = () => resolve(window.YT);
+      
+      if (!document.querySelector('script[src*="youtube.com/iframe_api"]')) {
+        const tag = document.createElement('script');
+        tag.src = "https://www.youtube.com/iframe_api";
+        const firstScriptTag = document.getElementsByTagName('script')[0];
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+      }
     });
+    
+    return STATE.slideshow.ytPromise;
   },
 
   /**
@@ -2530,29 +2533,19 @@ const SlideshowManager = {
 
     document.addEventListener("keydown", (e) => {
       const container = document.getElementById("slides-container");
-      // Allow interaction if container is visible, even if not strictly focused
       if (!container || container.style.display === "none") {
         return;
       }
 
-      const focusElement = document.activeElement;
 
       switch (e.key) {
         case "ArrowRight":
-          if (focusElement && focusElement.classList.contains("detail-button")) {
-            focusElement.previousElementSibling.focus();
-          } else {
-            SlideshowManager.nextSlide();
-          }
+          SlideshowManager.nextSlide();
           e.preventDefault();
           break;
 
         case "ArrowLeft":
-          if (focusElement && focusElement.classList.contains("play-button")) {
-            focusElement.nextElementSibling.focus();
-          } else {
-            SlideshowManager.prevSlide();
-          }
+          SlideshowManager.prevSlide();
           e.preventDefault();
           break;
 
@@ -2568,8 +2561,15 @@ const SlideshowManager = {
           break;
 
         case "Enter":
-          if (focusElement) {
-            focusElement.click();
+          const currentItemId = STATE.slideshow.itemIds[STATE.slideshow.currentSlideIndex];
+          if (currentItemId) {
+             if (window.Emby && window.Emby.Page) {
+               Emby.Page.show(
+                 `/details?id=${currentItemId}&serverId=${STATE.jellyfinData.serverId}`
+               );
+             } else {
+               window.location.href = `#/details?id=${currentItemId}&serverId=${STATE.jellyfinData.serverId}`;
+             }
           }
           e.preventDefault();
           break;
@@ -3110,6 +3110,84 @@ const MediaBarEnhancedSettingsManager = {
 };
 
 /**
+ * Initialize page visibility handling to pause when tab is inactive
+ */
+const initPageVisibilityHandler = () => {
+  let wasVideoPlayingBeforeHide = false;
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      console.log("Tab inactive - pausing slideshow and videos");
+      wasVideoPlayingBeforeHide = STATE.slideshow.isVideoPlaying;
+      
+      if (STATE.slideshow.slideInterval) {
+        STATE.slideshow.slideInterval.stop();
+      }
+      
+      // Pause active video if playing
+      const currentItemId = STATE.slideshow.itemIds[STATE.slideshow.currentSlideIndex];
+      if (currentItemId) {
+        // YouTube
+        if (STATE.slideshow.videoPlayers && STATE.slideshow.videoPlayers[currentItemId]) {
+          const player = STATE.slideshow.videoPlayers[currentItemId];
+          if (typeof player.pauseVideo === "function") {
+            try {
+              player.pauseVideo();
+              STATE.slideshow.isVideoPlaying = false;
+            } catch (e) {
+              console.warn("Error pausing video on tab hide:", e);
+            }
+          } else if (player.tagName === 'VIDEO') { // HTML5 Video
+             player.pause();
+             STATE.slideshow.isVideoPlaying = false;
+          }
+        }
+      }
+    } else {
+      console.log("Tab active - resuming slideshow");
+      if (!STATE.slideshow.isPaused) {
+        const currentItemId = STATE.slideshow.itemIds[STATE.slideshow.currentSlideIndex];
+        
+        if (wasVideoPlayingBeforeHide && currentItemId && STATE.slideshow.videoPlayers && STATE.slideshow.videoPlayers[currentItemId]) {
+          const player = STATE.slideshow.videoPlayers[currentItemId];
+          
+          // YouTube
+          if (typeof player.playVideo === "function") {
+            try {
+              player.playVideo();
+              STATE.slideshow.isVideoPlaying = true;
+            } catch (e) {
+              console.warn("Error resuming video on tab show:", e);
+              if (STATE.slideshow.slideInterval) {
+                STATE.slideshow.slideInterval.start();
+              }
+            }
+          } else if (player.tagName === 'VIDEO') { // HTML5 Video
+             try {
+                player.play().catch(e => console.warn("Error resuming HTML5 video:", e));
+                STATE.slideshow.isVideoPlaying = true;
+             } catch(e) { console.warn(e); }
+          }
+        } else {
+          // No video was playing, just restart interval
+          const activeSlide = document.querySelector('.slide.active');
+          const hasVideo = activeSlide && activeSlide.querySelector('.video-backdrop');
+          
+          if (CONFIG.waitForTrailerToEnd && hasVideo) {
+             // Don't restart interval if waiting for trailer
+          } else {
+             if (STATE.slideshow.slideInterval) {
+               STATE.slideshow.slideInterval.start();
+             }
+          }
+        }
+        wasVideoPlayingBeforeHide = false;
+      }
+    }
+  });
+};
+
+/**
  * Initialize the slideshow
  */
 const slidesInit = async () => {
@@ -3221,6 +3299,8 @@ const slidesInit = async () => {
     SlideshowManager.initTouchEvents();
 
     SlideshowManager.initKeyboardEvents();
+
+    initPageVisibilityHandler();
 
     VisibilityObserver.init();
 
