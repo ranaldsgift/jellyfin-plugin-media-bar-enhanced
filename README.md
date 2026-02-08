@@ -25,6 +25,7 @@ This plugin is a fork and enhancement of the original [Media Bar by MakD](https:
   - [Troubleshooting](#troubleshooting)
     - [Effects Not Showing](#effects-not-showing)
     - [Docker Permission Issues](#docker-permission-issues)
+  - [Credits](#credits)
   - [Contributing](#contributing)
 
 ---
@@ -243,6 +244,12 @@ docker cp jellyfin:/jellyfin/jellyfin-web/index.html /path/to/jellyfin/config/in
 volumes:
   - /path/to/jellyfin/config/index.html:/jellyfin/jellyfin-web/index.html
 ```
+
+## Credits
+
+This project is based on the original [Jellyfin Media Bar by MakD](https://github.com/MakD/Jellyfin-Media-Bar) and incorporates concepts from [IAmParadox27's plugin fork](https://github.com/IAmParadox27/jellyfin-plugin-media-bar). Thanks for their work!
+
+Also, special thanks to IAmParadox27 for the [File Transformation plugin](https://github.com/IAmParadox27/jellyfin-plugin-file-transformation) which this plugin can optionally use for improved Docker compatibility.
 
 ## Contributing
 
