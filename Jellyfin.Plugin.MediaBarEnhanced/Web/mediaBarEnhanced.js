@@ -1,6 +1,6 @@
 /*
- * Jellyfin Slideshow by M0RPH3US v3.0.9
- * Modified by CodeDevMLH v1.1.0.0
+ * Jellyfin Slideshow by M0RPH3US v4.0.1
+ * Modified by CodeDevMLH
  * 
  * New features:
  * - optional Trailer background video support
@@ -38,6 +38,7 @@ const CONFIG = {
   slideAnimationEnabled: true,
   enableVideoBackdrop: true,
   useSponsorBlock: true,
+  preferLocalTrailers: false,
   waitForTrailerToEnd: true,
   startMuted: true,
   fullWidthVideo: true,
@@ -51,6 +52,8 @@ const CONFIG = {
   customMediaIds: "",
   enableLoadingScreen: true,
   enableClientSideSettings: false,
+  sortBy: "Random",
+  sortOrder: "Ascending",
 };
 
 // State management
@@ -81,6 +84,8 @@ const STATE = {
     sponsorBlockInterval: null,
     isMuted: CONFIG.startMuted,
     customTrailerUrls: {},
+    ytPromise: null,
+    autoplayTimeouts: [],
   },
 };
 
@@ -460,6 +465,66 @@ waitForApiClientAndInitialize();
  */
 const SlideUtils = {
   /**
+   * Sorts items based on configuration
+   * @param {Array<Object>} items - Array of item objects
+   * @param {string} sortBy - Sort criteria
+   * @param {string} sortOrder - Sort order 'Ascending' or 'Descending'
+   * @returns {Array<Object>} Sorted array of items
+   */
+  sortItems(items, sortBy, sortOrder) {
+    if (sortBy === 'Random' || sortBy === 'Original') {
+      return items;
+    }
+
+    const simpleCompare = (a, b) => {
+      if (a < b) return -1;
+      if (a > b) return 1;
+      return 0;
+    };
+
+    const sorted = [...items].sort((a, b) => {
+      let valA, valB;
+
+      switch (sortBy) {
+        case 'PremiereDate':
+          valA = new Date(a.PremiereDate).getTime();
+          valB = new Date(b.PremiereDate).getTime();
+          break;
+        case 'ProductionYear':
+           valA = a.ProductionYear || 0;
+           valB = b.ProductionYear || 0;
+           break;
+        case 'CriticRating':
+           valA = a.CriticRating || 0;
+           valB = b.CriticRating || 0;
+           break;
+        case 'CommunityRating':
+          valA = a.CommunityRating || 0;
+          valB = b.CommunityRating || 0;
+          break;
+        case 'Runtime':
+          valA = a.RunTimeTicks || 0;
+          valB = b.RunTimeTicks || 0;
+          break;
+        case 'Name':
+          valA = (a.Name || '').toLowerCase();
+          valB = (b.Name || '').toLowerCase();
+          break;
+        default:
+          return 0;
+      }
+
+      return simpleCompare(valA, valB);
+    });
+
+    if (sortOrder === 'Descending') {
+      sorted.reverse();
+    }
+
+    return sorted;
+  },
+
+  /**
    * Shuffles array elements randomly
    * @param {Array} array - Array to shuffle
    * @returns {Array} Shuffled array
@@ -541,7 +606,10 @@ const SlideUtils = {
   getOrCreateSlidesContainer() {
     let container = document.getElementById("slides-container");
     if (!container) {
-      container = this.createElement("div", { id: "slides-container" });
+      container = this.createElement("div", { 
+        id: "slides-container",
+        className: "noautofocus"
+      });
       document.body.appendChild(container);
     }
     return container;
@@ -582,23 +650,25 @@ const SlideUtils = {
    * @returns {Promise<void>}
    */
   loadYouTubeIframeAPI() {
-    return new Promise((resolve) => {
+    if (STATE.slideshow.ytPromise) return STATE.slideshow.ytPromise;
+
+    STATE.slideshow.ytPromise = new Promise((resolve) => {
       if (window.YT && window.YT.Player) {
-        resolve();
+        resolve(window.YT);
         return;
       }
 
-      const tag = document.createElement('script');
-      tag.src = "https://www.youtube.com/iframe_api";
-      const firstScriptTag = document.getElementsByTagName('script')[0];
-      firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
-
-      const previousOnYouTubeIframeAPIReady = window.onYouTubeIframeAPIReady;
-      window.onYouTubeIframeAPIReady = () => {
-        if (previousOnYouTubeIframeAPIReady) previousOnYouTubeIframeAPIReady();
-        resolve();
-      };
+      window.onYouTubeIframeAPIReady = () => resolve(window.YT);
+      
+      if (!document.querySelector('script[src*="youtube.com/iframe_api"]')) {
+        const tag = document.createElement('script');
+        tag.src = "https://www.youtube.com/iframe_api";
+        const firstScriptTag = document.getElementsByTagName('script')[0];
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+      }
     });
+    
+    return STATE.slideshow.ytPromise;
   },
 
   /**
@@ -957,8 +1027,8 @@ const ApiUtils = {
       }
 
       const response = await fetch(
-        `${STATE.jellyfinData.serverAddress}/Items/${itemId}`,
-        // `${STATE.jellyfinData.serverAddress}/Users/${STATE.jellyfinData.userId}/Items/${itemId}?Fields=Overview,RemoteTrailers,Genres,CommunityRating,CriticRating,OfficialRating,PremiereDate,RunTimeTicks,ProductionYear,MediaSources`,
+        // `${STATE.jellyfinData.serverAddress}/Items/${itemId}`,
+        `${STATE.jellyfinData.serverAddress}/Items/${itemId}?Fields=Overview,RemoteTrailers,Genres,CommunityRating,CriticRating,OfficialRating,PremiereDate,ProductionYear,MediaSources,RunTimeTicks,LocalTrailerCount`,
         {
           headers: this.getAuthHeaders(),
         }
@@ -1030,8 +1100,16 @@ const ApiUtils = {
 
       console.log("Fetching random items from server...");
 
+      let sortParams = `sortBy=${CONFIG.sortBy}`;
+
+      if (CONFIG.sortBy === 'Random' || CONFIG.sortBy === 'Original') {
+          sortParams = 'sortBy=Random';
+      } else {
+        sortParams += `&sortOrder=${CONFIG.sortOrder}`;
+      }
+
       const response = await fetch(
-        `${STATE.jellyfinData.serverAddress}/Items?IncludeItemTypes=Movie,Series&Recursive=true&hasOverview=true&imageTypes=Logo,Backdrop&sortBy=Random&isPlayed=False&enableUserData=true&Limit=${CONFIG.maxItems}&fields=Id`,
+        `${STATE.jellyfinData.serverAddress}/Items?IncludeItemTypes=Movie,Series&Recursive=true&hasOverview=true&imageTypes=Logo,Backdrop&${sortParams}&isPlayed=False&enableUserData=true&Limit=${CONFIG.maxItems}&fields=Id`,
         {
           headers: this.getAuthHeaders(),
         }
@@ -1250,6 +1328,39 @@ const ApiUtils = {
       console.error(`Error fetching collection items for ${collectionId}:`, error);
       return [];
     }
+  },
+
+  /**
+   * Fetches the first local trailer for an item
+   * @param {string} itemId - Item ID
+   * @returns {Promise<string|null>} Stream URL or null
+   */
+  async fetchLocalTrailer(itemId) {
+    try {
+      const response = await fetch(
+        `${STATE.jellyfinData.serverAddress}/Users/${STATE.jellyfinData.userId}/Items/${itemId}/LocalTrailers`,
+        {
+          headers: this.getAuthHeaders(),
+        }
+      );
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const trailers = await response.json();
+      if (trailers && trailers.length > 0) {
+        const trailer = trailers[0];
+        const mediaSourceId = trailer.MediaSources && trailer.MediaSources[0] ? trailer.MediaSources[0].Id : trailer.Id;
+        
+        // Construct stream URL
+        return `${STATE.jellyfinData.serverAddress}/Videos/${trailer.Id}/stream.mp4?Static=true&mediaSourceId=${mediaSourceId}&api_key=${STATE.jellyfinData.accessToken}`;
+      }
+      return null;
+    } catch (error) {
+      console.error(`Error fetching local trailer for ${itemId}:`, error);
+      return null;
+    }
   }
 };
 
@@ -1306,6 +1417,24 @@ class SlideTimer {
  */
 const VisibilityObserver = {
   updateVisibility() {
+    const videoPlayer = document.querySelector('.videoPlayerContainer');
+    const trailerPlayer = document.querySelector('.youtubePlayerContainer');
+    
+    // If a full screen video player is active, hide slideshow and stop playback
+    if ((videoPlayer && !videoPlayer.classList.contains('hide')) || (trailerPlayer && !trailerPlayer.classList.contains('hide'))) {
+        const container = document.getElementById("slides-container");
+        if (container) {
+            container.style.display = "none";
+            container.style.visibility = "hidden";
+            container.style.pointerEvents = "none";
+        }
+        if (STATE.slideshow.slideInterval) {
+            STATE.slideshow.slideInterval.stop();
+        }
+        SlideshowManager.stopAllPlayback();
+        return;
+    }
+
     const activeTab = document.querySelector(".emby-tab-button-active");
     const container = document.getElementById("slides-container");
 
@@ -1432,12 +1561,21 @@ const SlideCreator = {
     let isVideo = false;
     let trailerUrl = null;
 
-    // 1. Check for Remote Trailers (YouTube)
-    // Priority: Custom Config URL > Metadata RemoteTrailer
+    // 1. Check for Remote/Local Trailers
+    // Priority: Custom Config URL > (PreferLocal -> Local) > Metadata RemoteTrailer
+
+    // 1a. Custom URL override
     if (STATE.slideshow.customTrailerUrls && STATE.slideshow.customTrailerUrls[itemId]) {
       trailerUrl = STATE.slideshow.customTrailerUrls[itemId];
       console.log(`Using custom trailer URL for ${itemId}: ${trailerUrl}`);
-    } else if (item.RemoteTrailers && item.RemoteTrailers.length > 0) {
+    } 
+    // 1b. Check Local Trailer if preferred
+    else if (CONFIG.preferLocalTrailers && item.LocalTrailerCount > 0 && item.localTrailerUrl) {
+         trailerUrl = item.localTrailerUrl;
+         console.log(`Using local trailer for ${itemId}: ${trailerUrl}`);
+    }
+    // 1c. Fallback to Remote Trailer
+    else if (item.RemoteTrailers && item.RemoteTrailers.length > 0) {
       trailerUrl = item.RemoteTrailers[0].Url;
     }
 
@@ -1541,10 +1679,23 @@ const SlideCreator = {
 
                   // Only play if this is the active slide
                   const slide = document.querySelector(`.slide[data-item-id="${itemId}"]`);
-                  if (slide && slide.classList.contains('active')) {
+                  const isVideoPlayerOpen = document.querySelector('.videoPlayerContainer') || document.querySelector('.youtubePlayerContainer');
+
+                  if (slide && slide.classList.contains('active') && !document.hidden && (!isVideoPlayerOpen || isVideoPlayerOpen.classList.contains('hide'))) {
                     event.target.playVideo();
+                    
                     // Check if it actually started playing after a short delay (handling autoplay blocks)
-                    setTimeout(() => {
+                    const timeoutId = setTimeout(() => {
+                      // Re-check conditions before processing fallback
+                      const isVideoPlayerOpenNow = document.querySelector('.videoPlayerContainer') || document.querySelector('.youtubePlayerContainer');
+                      if (document.hidden || (isVideoPlayerOpenNow && !isVideoPlayerOpenNow.classList.contains('hide')) || !slide.classList.contains('active')) {
+                          console.log(`Navigation detected during autoplay check for ${itemId}, stopping video.`);
+                          try {
+                            event.target.stopVideo();
+                          } catch (e) { console.warn("Error stopping video in timeout:", e); }
+                          return;
+                      }
+
                       if (event.target.getPlayerState() !== YT.PlayerState.PLAYING &&
                         event.target.getPlayerState() !== YT.PlayerState.BUFFERING) {
                         console.warn(`Autoplay blocked for ${itemId}, attempting muted fallback`);
@@ -1552,6 +1703,9 @@ const SlideCreator = {
                         event.target.playVideo();
                       }
                     }, 1000);
+
+                    if (!STATE.slideshow.autoplayTimeouts) STATE.slideshow.autoplayTimeouts = [];
+                    STATE.slideshow.autoplayTimeouts.push(timeoutId);
 
                     // Pause slideshow timer when video starts if configured
                     if (CONFIG.waitForTrailerToEnd && STATE.slideshow.slideInterval) {
@@ -1589,7 +1743,7 @@ const SlideCreator = {
           autoplay: false,
           preload: "auto",
           loop: false,
-          style: "object-fit: cover; width: 100%; height: 100%; pointer-events: none;"
+          style: "object-fit: cover; object-position: center center; width: 100%; height: 100%; position: absolute; top: 0; left: 0; pointer-events: none;"
         };
 
         if (STATE.slideshow.isMuted) {
@@ -1930,6 +2084,11 @@ const SlideCreator = {
       const container = SlideUtils.getOrCreateSlidesContainer();
 
       const item = await ApiUtils.fetchItemDetails(itemId);
+
+      // Pre-fetch local trailer URL if needed
+      if (CONFIG.preferLocalTrailers && item.LocalTrailerCount > 0) {
+          item.localTrailerUrl = await ApiUtils.fetchLocalTrailer(itemId);
+      }
 
       const slideElement = this.createSlideElement(
         item,
@@ -2423,15 +2582,26 @@ const SlideshowManager = {
    * Used when navigating away from the home screen
    */
   stopAllPlayback() {
-    // 1. Pause all YouTube players
+    // Clear any pending autoplay timeouts
+    if (STATE.slideshow.autoplayTimeouts) {
+        STATE.slideshow.autoplayTimeouts.forEach(id => clearTimeout(id));
+        STATE.slideshow.autoplayTimeouts = [];
+    }
+
+    // 1. Stop all YouTube players
     if (STATE.slideshow.videoPlayers) {
       Object.values(STATE.slideshow.videoPlayers).forEach(player => {
         try {
-          if (player && typeof player.pauseVideo === 'function') {
+          if (player && typeof player.stopVideo === 'function') {
+            player.stopVideo();
+            if (typeof player.clearVideo === 'function') {
+                player.clearVideo();
+            }
+          } else if (player && typeof player.pauseVideo === 'function') {
             player.pauseVideo();
           }
         } catch (e) {
-          console.warn("Error pausing YouTube player:", e);
+          console.warn("Error pausing/stopping YouTube player:", e);
         }
       });
     }
@@ -2530,48 +2700,80 @@ const SlideshowManager = {
 
     document.addEventListener("keydown", (e) => {
       const container = document.getElementById("slides-container");
-      // Allow interaction if container is visible, even if not strictly focused
       if (!container || container.style.display === "none") {
         return;
       }
 
-      const focusElement = document.activeElement;
+      const activeElement = document.activeElement;
+      const isTvDevice = window.browser && window.browser.tv;
+      const isTvLayout = window.layoutManager && window.layoutManager.tv;
+      const hasTvClass = document.documentElement.classList.contains('layout-tv') || document.body.classList.contains('layout-tv');
+      const isTvMode = isTvDevice || isTvLayout || hasTvClass;
+
+      // Check Focus State
+      const isBodyFocused = activeElement === document.body;
+      const hasDirectFocus = container.contains(activeElement) || activeElement === container;
+      
+      // Determine if we should handle navigation keys (Arrows, Space, M)
+      // TV Mode: Strict focus required (must be on slideshow)
+      // Desktop Mode: Loose focus allowed (slideshow OR body/nothing focused)
+      const canControlSlideshow = isTvMode ? hasDirectFocus : (hasDirectFocus || isBodyFocused);
+
+      // Check for Input Fields (always ignore typing)
+      const isInputElement = activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA' || activeElement.isContentEditable);
+      if (isInputElement) return;
+
+      // Check active video players (ignore if video is playing/overlay is open)
+      const videoPlayer = document.querySelector('.videoPlayerContainer');
+      const trailerPlayer = document.querySelector('.youtubePlayerContainer');
+      const isVideoOpen = (videoPlayer && !videoPlayer.classList.contains('hide')) || (trailerPlayer && !trailerPlayer.classList.contains('hide'));
+      if (isVideoOpen) return;
 
       switch (e.key) {
         case "ArrowRight":
-          if (focusElement && focusElement.classList.contains("detail-button")) {
-            focusElement.previousElementSibling.focus();
-          } else {
+          if (canControlSlideshow) {
             SlideshowManager.nextSlide();
+            e.preventDefault();
           }
-          e.preventDefault();
           break;
 
         case "ArrowLeft":
-          if (focusElement && focusElement.classList.contains("play-button")) {
-            focusElement.nextElementSibling.focus();
-          } else {
+          if (canControlSlideshow) {
             SlideshowManager.prevSlide();
+            e.preventDefault();
           }
-          e.preventDefault();
           break;
 
         case " ": // Space bar
-          this.togglePause();
-          e.preventDefault();
+          if (canControlSlideshow) {
+            this.togglePause();
+            e.preventDefault();
+          }
           break;
 
         case "m": // Mute toggle
         case "M":
-          this.toggleMute();
-          e.preventDefault();
+          if (canControlSlideshow) {
+            this.toggleMute();
+            e.preventDefault();
+          }
           break;
 
         case "Enter":
-          if (focusElement) {
-            focusElement.click();
+          // Enter always requires direct focus on the slideshow to avoid conflicts
+          if (hasDirectFocus) {
+            const currentItemId = STATE.slideshow.itemIds[STATE.slideshow.currentSlideIndex];
+            if (currentItemId) {
+               if (window.Emby && window.Emby.Page) {
+                 Emby.Page.show(
+                   `/details?id=${currentItemId}&serverId=${STATE.jellyfinData.serverId}`
+                 );
+               } else {
+                 window.location.href = `#/details?id=${currentItemId}&serverId=${STATE.jellyfinData.serverId}`;
+               }
+            }
+            e.preventDefault();
           }
-          e.preventDefault();
           break;
       }
     });
@@ -2763,9 +2965,27 @@ const SlideshowManager = {
       if (itemIds.length === 0) {
         console.log("No custom list found, fetching random items from server...");
         itemIds = await ApiUtils.fetchItemIdsFromServer();
+        
+        if (CONFIG.sortBy === 'Random') {
+            itemIds = SlideUtils.shuffleArray(itemIds);
+        }
+      } else {
+        // Custom IDs
+        if (CONFIG.sortBy === 'Random') {
+             itemIds = SlideUtils.shuffleArray(itemIds);
+        } else if (CONFIG.sortBy !== 'Original') {
+            // Client-side sort required...
+             console.log(`Sorting ${itemIds.length} custom items by ${CONFIG.sortBy} ${CONFIG.sortOrder}`);
+             const itemsWithDetails = [];
+             for (const id of itemIds) {
+                 const item = await ApiUtils.fetchItemDetails(id);
+                 if (item) itemsWithDetails.push(item);
+             }
+             
+             const sortedItems = SlideUtils.sortItems(itemsWithDetails, CONFIG.sortBy, CONFIG.sortOrder);
+             itemIds = sortedItems.map(i => i.Id);
+        }
       }
-
-      itemIds = SlideUtils.shuffleArray(itemIds);
 
       STATE.slideshow.itemIds = itemIds;
       STATE.slideshow.totalItems = itemIds.length;
@@ -3110,6 +3330,84 @@ const MediaBarEnhancedSettingsManager = {
 };
 
 /**
+ * Initialize page visibility handling to pause when tab is inactive
+ */
+const initPageVisibilityHandler = () => {
+  let wasVideoPlayingBeforeHide = false;
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      console.log("Tab inactive - pausing slideshow and videos");
+      wasVideoPlayingBeforeHide = STATE.slideshow.isVideoPlaying;
+      
+      if (STATE.slideshow.slideInterval) {
+        STATE.slideshow.slideInterval.stop();
+      }
+      
+      // Pause active video if playing
+      const currentItemId = STATE.slideshow.itemIds[STATE.slideshow.currentSlideIndex];
+      if (currentItemId) {
+        // YouTube
+        if (STATE.slideshow.videoPlayers && STATE.slideshow.videoPlayers[currentItemId]) {
+          const player = STATE.slideshow.videoPlayers[currentItemId];
+          if (typeof player.pauseVideo === "function") {
+            try {
+              player.pauseVideo();
+              STATE.slideshow.isVideoPlaying = false;
+            } catch (e) {
+              console.warn("Error pausing video on tab hide:", e);
+            }
+          } else if (player.tagName === 'VIDEO') { // HTML5 Video
+             player.pause();
+             STATE.slideshow.isVideoPlaying = false;
+          }
+        }
+      }
+    } else {
+      console.log("Tab active - resuming slideshow");
+      if (!STATE.slideshow.isPaused) {
+        const currentItemId = STATE.slideshow.itemIds[STATE.slideshow.currentSlideIndex];
+        
+        if (wasVideoPlayingBeforeHide && currentItemId && STATE.slideshow.videoPlayers && STATE.slideshow.videoPlayers[currentItemId]) {
+          const player = STATE.slideshow.videoPlayers[currentItemId];
+          
+          // YouTube
+          if (typeof player.playVideo === "function") {
+            try {
+              player.playVideo();
+              STATE.slideshow.isVideoPlaying = true;
+            } catch (e) {
+              console.warn("Error resuming video on tab show:", e);
+              if (STATE.slideshow.slideInterval) {
+                STATE.slideshow.slideInterval.start();
+              }
+            }
+          } else if (player.tagName === 'VIDEO') { // HTML5 Video
+             try {
+                player.play().catch(e => console.warn("Error resuming HTML5 video:", e));
+                STATE.slideshow.isVideoPlaying = true;
+             } catch(e) { console.warn(e); }
+          }
+        } else {
+          // No video was playing, just restart interval
+          const activeSlide = document.querySelector('.slide.active');
+          const hasVideo = activeSlide && activeSlide.querySelector('.video-backdrop');
+          
+          if (CONFIG.waitForTrailerToEnd && hasVideo) {
+             // Don't restart interval if waiting for trailer
+          } else {
+             if (STATE.slideshow.slideInterval) {
+               STATE.slideshow.slideInterval.start();
+             }
+          }
+        }
+        wasVideoPlayingBeforeHide = false;
+      }
+    }
+  });
+};
+
+/**
  * Initialize the slideshow
  */
 const slidesInit = async () => {
@@ -3221,6 +3519,8 @@ const slidesInit = async () => {
     SlideshowManager.initTouchEvents();
 
     SlideshowManager.initKeyboardEvents();
+
+    initPageVisibilityHandler();
 
     VisibilityObserver.init();
 

@@ -1,6 +1,6 @@
 /*
- * Jellyfin Slideshow by M0RPH3US v3.0.9
- * Modified by CodeDevMLH v1.1.0.0
+ * Jellyfin Slideshow by M0RPH3US v4.0.1
+ * Modified by CodeDevMLH
  * 
  * New features:
  * - optional Trailer background video support
@@ -161,7 +161,7 @@
 
 .homeSectionsContainer {
   position: relative;
-  top: 65vh;
+  margin-top: 65vh;
   z-index: 6;
 }
 
@@ -991,4 +991,9 @@
 
 .dots-container .slide-counter {
   margin: 0;
+}
+
+/* Fix scrolling issue in TV mode - preserve space for slideshow */
+.layout-tv html, .layout-tv body {
+  scroll-padding-top: 65vh;
 }
