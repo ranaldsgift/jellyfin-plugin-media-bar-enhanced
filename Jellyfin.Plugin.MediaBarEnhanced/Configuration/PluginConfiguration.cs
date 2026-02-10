@@ -21,6 +21,7 @@ namespace Jellyfin.Plugin.MediaBarEnhanced.Configuration
         public bool SlideAnimationEnabled { get; set; } = true;
         public bool EnableVideoBackdrop { get; set; } = true;
         public bool UseSponsorBlock { get; set; } = true;
+        public bool PreferLocalTrailers { get; set; } = false;
         public bool WaitForTrailerToEnd { get; set; } = true;
         public bool StartMuted { get; set; } = true;
         public bool FullWidthVideo { get; set; } = true;
@@ -35,5 +36,7 @@ namespace Jellyfin.Plugin.MediaBarEnhanced.Configuration
         public bool EnableSeasonalContent { get; set; } = false;
         public bool IsEnabled { get; set; } = true;
         public bool EnableClientSideSettings { get; set; } = false;
+        public string SortBy { get; set; } = "Random";
+        public string SortOrder { get; set; } = "Ascending";
     }
 }
