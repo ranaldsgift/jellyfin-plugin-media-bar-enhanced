@@ -98,6 +98,9 @@ This plugin builds upon the original Media Bar with new capabilities and improve
         <summary>Have a look:</summary>
         <img width="513" height="575" alt="Client-Settings" src="https://github.com/user-attachments/assets/3e29a84f-f8ea-4b7b-b561-80493cb1535b" />
         </details>
+    *   **Local Trailers Preference**: Option to prefer local trailers (from the media item) over online sources.
+    *   **Content Sorting Options**: Sort content by various criteria such as PremiereDate, ProductionYear, Random, or Original order.
+    *   **Client-Side Settings**: Allow users to override settings locally on their device.
 
 ### Core Features
 *   **Immersive Slideshow**: Rotates through your media library
