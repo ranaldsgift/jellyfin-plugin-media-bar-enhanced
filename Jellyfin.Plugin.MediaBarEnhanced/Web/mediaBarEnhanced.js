@@ -14,6 +14,9 @@
  * - option to disable loading screen
  * - option to put collection (boxsets) IDs into the slideshow to display their items
  * - option to enable client-side settings (allow users to override settings locally on their device)
+ * - option to enable seasonal content (only show items that are relevant to the current season/holiday)
+ * - option to prefer local trailers (from the media item) over online sources
+ * - options to sort the content by various criteria (PremiereDate, ProductionYear, Random, Original order, etc.)
  */
 
 //Core Module Configuration
@@ -737,7 +740,9 @@ const SlideUtils = {
             autoplay: 1,
             controls: 1,
             iv_load_policy: 3,
-            rel: 0
+            rel: 0,
+            playsinline: 1,
+            origin: window.location.origin
           }
         });
       });
@@ -1626,7 +1631,9 @@ const SlideCreator = {
               fs: 0,
               iv_load_policy: 3,
               rel: 0,
-              loop: 0
+              loop: 0,
+              playsinline: 1,
+              origin: window.location.origin
             };
 
             // Determine video quality
